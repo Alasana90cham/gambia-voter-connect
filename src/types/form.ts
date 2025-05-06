@@ -45,5 +45,6 @@ export interface RegionConstituencies {
 export interface UserRole {
   id: string;
   email: string;
+  password?: string; // Added to support deletion
   isAdmin: boolean;
 }

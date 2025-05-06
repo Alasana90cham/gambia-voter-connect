@@ -1,4 +1,5 @@
-import { RegionConstituencies } from "../types/form";
+
+import { RegionConstituencies, UserRole } from "../types/form";
 
 export const regionConstituencies: RegionConstituencies = {
   "Banjul": [
@@ -10,7 +11,6 @@ export const regionConstituencies: RegionConstituencies = {
     "Bakau",
     "Jeshwang",
     "Serekunda West",
-    "Serrekunda",
     "Bundungka Kunda",
     "Latrikunda Sabijie",
     "Talinding Kunjang"
@@ -74,7 +74,7 @@ export const regionConstituencies: RegionConstituencies = {
 export const registeredEmails = new Set<string>();
 
 // Mock admin users with passwords (in a real system, passwords would be hashed)
-export const adminUsers = [
+export const adminUsers: UserRole[] = [
   { id: "admin1", email: "admin@nypg.org", password: "admin123", isAdmin: true },
   { id: "admin2", email: "director@nypg.org", password: "admin123", isAdmin: true }
 ];

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -7,7 +6,7 @@ import Footer from '@/components/Footer';
 import { adminUsers, addAdminUser } from '@/data/constituencies';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Download, UserPlus, Filter, Search } from 'lucide-react';
+import { Download, UserPlus, Filter, Search, Trash2 } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
@@ -185,6 +184,9 @@ const Statistics = () => {
   
   const [filteredData, setFilteredData] = useState(mockVoterData);
   
+  // Admin users state
+  const [adminList, setAdminList] = useState(adminUsers);
+  
   // Apply filters to the data
   useEffect(() => {
     let result = mockVoterData;
@@ -264,7 +266,7 @@ const Statistics = () => {
   
   // Check for admin login
   const handleLogin = () => {
-    const admin = adminUsers.find(user => user.email === email);
+    const admin = adminList.find(user => user.email === email);
     
     if (admin && admin.password === password) {
       setIsAdmin(true);
@@ -286,7 +288,7 @@ const Statistics = () => {
     }
     
     // Check if admin with this email already exists
-    if (adminUsers.some(admin => admin.email === newAdminEmail)) {
+    if (adminList.some(admin => admin.email === newAdminEmail)) {
       toast({
         title: "Duplicate Admin",
         description: "An admin with this email already exists",
@@ -296,7 +298,9 @@ const Statistics = () => {
     }
     
     // Add new admin
-    addAdminUser(newAdminId, newAdminEmail, newAdminPassword);
+    const newAdmin = { id: newAdminId, email: newAdminEmail, password: newAdminPassword, isAdmin: true };
+    const updatedAdmins = [...adminList, newAdmin];
+    setAdminList(updatedAdmins);
     
     toast({
       title: "Admin Added",
@@ -308,6 +312,27 @@ const Statistics = () => {
     setNewAdminPassword('');
     setNewAdminId('');
     setOpenDialog(false);
+  };
+  
+  // Handle deleting an admin
+  const handleDeleteAdmin = (id: string) => {
+    // Don't allow deleting if there's only one admin left
+    if (adminList.length <= 1) {
+      toast({
+        title: "Cannot Delete Admin",
+        description: "At least one admin must remain in the system",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    const updatedAdmins = adminList.filter(admin => admin.id !== id);
+    setAdminList(updatedAdmins);
+    
+    toast({
+      title: "Admin Deleted",
+      description: "Admin has been deleted successfully",
+    });
   };
   
   // Handle Excel export
@@ -486,7 +511,7 @@ const Statistics = () => {
           </Card>
         </div>
         
-        {/* Registration Data Table */}
+        {/* Registration Data Table with Enhanced Filtering */}
         <Card className="p-6 mb-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
             <h2 className="text-xl font-semibold">Registration Data</h2>
@@ -506,7 +531,7 @@ const Statistics = () => {
                     <div className="space-y-1">
                       <div>Full Name</div>
                       <Input 
-                        placeholder="Filter..." 
+                        placeholder="Filter name..." 
                         className="h-8 w-full" 
                         value={filters.fullName}
                         onChange={(e) => handleFilterChange('fullName', e.target.value)}
@@ -517,8 +542,9 @@ const Statistics = () => {
                     <div className="space-y-1">
                       <div>Age</div>
                       <Input 
-                        placeholder="Filter..." 
+                        placeholder="Filter age..." 
                         className="h-8 w-full" 
+                        type="number"
                         value={filters.dateOfBirth}
                         onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
                       />
@@ -528,7 +554,7 @@ const Statistics = () => {
                     <div className="space-y-1">
                       <div>Organization</div>
                       <Input 
-                        placeholder="Filter..." 
+                        placeholder="Filter organization..." 
                         className="h-8 w-full" 
                         value={filters.organization}
                         onChange={(e) => handleFilterChange('organization', e.target.value)}
@@ -563,23 +589,38 @@ const Statistics = () => {
                   <TableHead>
                     <div className="space-y-1">
                       <div>Region</div>
-                      <Input 
-                        placeholder="Filter..." 
-                        className="h-8 w-full" 
+                      <select 
+                        className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
                         value={filters.region}
                         onChange={(e) => handleFilterChange('region', e.target.value)}
-                      />
+                      >
+                        <option value="">All Regions</option>
+                        {regionData.map((region) => (
+                          <option key={region.name} value={region.name}>
+                            {region.name}
+                          </option>
+                        ))}
+                      </select>
                     </div>
                   </TableHead>
                   <TableHead>
                     <div className="space-y-1">
                       <div>Constituency</div>
-                      <Input 
-                        placeholder="Filter..." 
-                        className="h-8 w-full" 
+                      <select 
+                        className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
                         value={filters.constituency}
                         onChange={(e) => handleFilterChange('constituency', e.target.value)}
-                      />
+                      >
+                        <option value="">All Constituencies</option>
+                        {/* Dynamically show constituencies based on selected region in filters */}
+                        {filters.region && 
+                          constituencyData[filters.region as keyof typeof constituencyData]?.map(item => (
+                            <option key={item.name} value={item.name}>
+                              {item.name}
+                            </option>
+                          ))
+                        }
+                      </select>
                     </div>
                   </TableHead>
                   <TableHead>
@@ -601,7 +642,7 @@ const Statistics = () => {
                     <div className="space-y-1">
                       <div>ID Number</div>
                       <Input 
-                        placeholder="Filter..." 
+                        placeholder="Filter ID..." 
                         className="h-8 w-full" 
                         value={filters.identificationNumber}
                         onChange={(e) => handleFilterChange('identificationNumber', e.target.value)}
@@ -688,7 +729,7 @@ const Statistics = () => {
           </div>
         </Card>
         
-        {/* Admin Management Section */}
+        {/* Admin Management Section with Delete Function */}
         <Card className="p-6 mb-8">
           <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
             <h2 className="text-xl font-semibold">Admin Management</h2>
@@ -749,14 +790,26 @@ const Statistics = () => {
                   <th className="py-2 px-4 border-b border-gray-200 text-left">ID</th>
                   <th className="py-2 px-4 border-b border-gray-200 text-left">Email</th>
                   <th className="py-2 px-4 border-b border-gray-200 text-left">Role</th>
+                  <th className="py-2 px-4 border-b border-gray-200 text-left">Actions</th>
                 </tr>
               </thead>
               <tbody>
-                {adminUsers.map(user => (
+                {adminList.map(user => (
                   <tr key={user.id}>
                     <td className="py-2 px-4 border-b border-gray-200">{user.id}</td>
                     <td className="py-2 px-4 border-b border-gray-200">{user.email}</td>
                     <td className="py-2 px-4 border-b border-gray-200">{user.isAdmin ? 'Admin' : 'User'}</td>
+                    <td className="py-2 px-4 border-b border-gray-200">
+                      <Button 
+                        variant="destructive" 
+                        size="sm"
+                        onClick={() => handleDeleteAdmin(user.id)}
+                        className="flex items-center gap-1"
+                      >
+                        <Trash2 size={16} />
+                        Delete
+                      </Button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
