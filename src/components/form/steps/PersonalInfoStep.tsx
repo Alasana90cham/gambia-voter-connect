@@ -5,7 +5,7 @@ import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { VoterFormData } from '@/types/form';
 import { format } from 'date-fns';
-import { Calendar as CalendarIcon } from 'lucide-react';
+import { CalendarIcon } from 'lucide-react';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
@@ -20,6 +20,11 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
   // Calculate max date (18 years ago from today)
   const today = new Date();
   const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
+  const minDate = new Date(1900, 0, 1); // Minimum date (January 1, 1900)
+  
+  // Calculate a reasonable default year to show in the calendar
+  // This will show around 30 years ago, which is a common adult age
+  const defaultCalendarDate = new Date(today.getFullYear() - 30, 0, 1);
   
   return (
     <div>
@@ -50,9 +55,9 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
                     !formData.dateOfBirth && "text-muted-foreground"
                   )}
                 >
-                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  <CalendarIcon className="mr-2 h-5 w-5" />
                   {formData.dateOfBirth ? (
-                    format(formData.dateOfBirth, "PPP")
+                    format(formData.dateOfBirth, "MMMM d, yyyy")
                   ) : (
                     <span>Select your date of birth</span>
                   )}
@@ -63,13 +68,17 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
                   mode="single"
                   selected={formData.dateOfBirth || undefined}
                   onSelect={(date) => updateFormData({ dateOfBirth: date })}
-                  disabled={(date) => date > maxDate || date > new Date()}
+                  disabled={(date) => date > maxDate || date < minDate}
+                  defaultMonth={formData.dateOfBirth || defaultCalendarDate}
                   initialFocus
+                  captionLayout="dropdown-buttons"
+                  fromYear={1900}
+                  toYear={maxDate.getFullYear()}
                 />
               </PopoverContent>
             </Popover>
             <p className="text-sm text-muted-foreground mt-1">
-              Must be at least 18 years old to register.
+              You must be at least 18 years old to register as a voter.
             </p>
           </div>
         </div>
