@@ -7,10 +7,13 @@ import Footer from '@/components/Footer';
 import { adminUsers, addAdminUser } from '@/data/constituencies';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Download, UserPlus } from 'lucide-react';
+import { Download, UserPlus, Filter, Search } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { VoterFormData } from "@/types/form";
+import { format } from "date-fns";
 
 // Mock data - this would come from your database in a real app
 const genderData = [
@@ -35,7 +38,6 @@ const constituencyData = {
     { name: 'Banjul North', value: 21 }
   ],
   'Kanifing': [
-    { name: 'Kanifing', value: 18 },
     { name: 'Bakau', value: 15 },
     { name: 'Jeshwang', value: 25 },
     { name: 'Serekunda West', value: 22 },
@@ -56,6 +58,106 @@ Object.keys(regionData).forEach(region => {
 
 const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
 
+// Sample voter registration data for the table
+const mockVoterData: Array<VoterFormData> = [
+  {
+    fullName: 'John Doe',
+    email: 'john@example.com',
+    dateOfBirth: new Date('1990-05-15'),
+    gender: 'male',
+    organization: 'Youth Organization A',
+    region: 'Banjul',
+    constituency: 'Banjul South',
+    identificationType: 'passport_number',
+    identificationNumber: '12345678',
+    agreeToTerms: true
+  },
+  {
+    fullName: 'Mary Smith',
+    email: 'mary@example.com',
+    dateOfBirth: new Date('1995-10-08'),
+    gender: 'female',
+    organization: 'Community Development',
+    region: 'Kanifing',
+    constituency: 'Bakau',
+    identificationType: 'identification_document',
+    identificationNumber: '87654321',
+    agreeToTerms: true
+  },
+  {
+    fullName: 'Ibrahim Jallow',
+    email: 'ibrahim@example.com',
+    dateOfBirth: new Date('1988-03-22'),
+    gender: 'male',
+    organization: 'Rural Youth Network',
+    region: 'West Coast',
+    constituency: 'Kombo East',
+    identificationType: 'birth_certificate',
+    identificationNumber: '23456789',
+    agreeToTerms: true
+  },
+  {
+    fullName: 'Fatou Ceesay',
+    email: 'fatou@example.com',
+    dateOfBirth: new Date('1992-12-01'),
+    gender: 'female',
+    organization: 'Women Empowerment Group',
+    region: 'North Bank',
+    constituency: 'Lower Nuimi',
+    identificationType: 'identification_document',
+    identificationNumber: '34567890',
+    agreeToTerms: true
+  },
+  {
+    fullName: 'Modou Lamin',
+    email: 'modou@example.com',
+    dateOfBirth: new Date('1985-07-30'),
+    gender: 'male',
+    organization: 'Farmers Association',
+    region: 'Central River',
+    constituency: 'Janjanbureh',
+    identificationType: 'birth_certificate',
+    identificationNumber: '45678901',
+    agreeToTerms: true
+  },
+  {
+    fullName: 'Isatou Jobe',
+    email: 'isatou@example.com',
+    dateOfBirth: new Date('1993-09-17'),
+    gender: 'female',
+    organization: 'Student Union',
+    region: 'Banjul',
+    constituency: 'Banjul North',
+    identificationType: 'passport_number',
+    identificationNumber: '56789012',
+    agreeToTerms: true
+  },
+  {
+    fullName: 'Ousman Bah',
+    email: 'ousman@example.com',
+    dateOfBirth: new Date('1991-02-14'),
+    gender: 'male',
+    organization: 'Environmental Club',
+    region: 'Upper River',
+    constituency: 'Basse',
+    identificationType: 'identification_document',
+    identificationNumber: '67890123',
+    agreeToTerms: true
+  },
+  {
+    fullName: 'Aminata Touray',
+    email: 'aminata@example.com',
+    dateOfBirth: new Date('1994-11-05'),
+    gender: 'female',
+    organization: 'Health Workers Network',
+    region: 'Lower River',
+    constituency: 'Kiang West',
+    identificationType: 'passport_number',
+    identificationNumber: '78901234',
+    agreeToTerms: true
+  }
+];
+
 const Statistics = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [email, setEmail] = useState('');
@@ -68,6 +170,97 @@ const Statistics = () => {
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [newAdminId, setNewAdminId] = useState('');
   const [openDialog, setOpenDialog] = useState(false);
+  
+  // Table filtering state
+  const [filters, setFilters] = useState({
+    fullName: '',
+    organization: '',
+    dateOfBirth: '',
+    gender: '',
+    region: '',
+    constituency: '',
+    identificationType: '',
+    identificationNumber: ''
+  });
+  
+  const [filteredData, setFilteredData] = useState(mockVoterData);
+  
+  // Apply filters to the data
+  useEffect(() => {
+    let result = mockVoterData;
+    
+    if (filters.fullName) {
+      result = result.filter(voter => 
+        voter.fullName.toLowerCase().includes(filters.fullName.toLowerCase())
+      );
+    }
+    
+    if (filters.organization) {
+      result = result.filter(voter => 
+        voter.organization.toLowerCase().includes(filters.organization.toLowerCase())
+      );
+    }
+    
+    if (filters.dateOfBirth) {
+      result = result.filter(voter => 
+        voter.dateOfBirth && format(voter.dateOfBirth, 'yyyy-MM-dd').includes(filters.dateOfBirth)
+      );
+    }
+    
+    if (filters.gender) {
+      result = result.filter(voter => 
+        voter.gender === filters.gender
+      );
+    }
+    
+    if (filters.region) {
+      result = result.filter(voter => 
+        voter.region && voter.region.toLowerCase().includes(filters.region.toLowerCase())
+      );
+    }
+    
+    if (filters.constituency) {
+      result = result.filter(voter => 
+        voter.constituency && voter.constituency.toLowerCase().includes(filters.constituency.toLowerCase())
+      );
+    }
+    
+    if (filters.identificationType) {
+      result = result.filter(voter => 
+        voter.identificationType && voter.identificationType.includes(filters.identificationType)
+      );
+    }
+    
+    if (filters.identificationNumber) {
+      result = result.filter(voter => 
+        voter.identificationNumber.includes(filters.identificationNumber)
+      );
+    }
+    
+    setFilteredData(result);
+  }, [filters]);
+  
+  // Handle filter changes
+  const handleFilterChange = (field: string, value: string) => {
+    setFilters(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+  
+  // Clear all filters
+  const clearFilters = () => {
+    setFilters({
+      fullName: '',
+      organization: '',
+      dateOfBirth: '',
+      gender: '',
+      region: '',
+      constituency: '',
+      identificationType: '',
+      identificationNumber: ''
+    });
+  };
   
   // Check for admin login
   const handleLogin = () => {
@@ -292,6 +485,166 @@ const Statistics = () => {
             </div>
           </Card>
         </div>
+        
+        {/* Registration Data Table */}
+        <Card className="p-6 mb-8">
+          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+            <h2 className="text-xl font-semibold">Registration Data</h2>
+            <div className="flex items-center gap-2">
+              <Button variant="outline" onClick={clearFilters} className="flex items-center gap-2">
+                <Filter size={16} />
+                Clear Filters
+              </Button>
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>
+                    <div className="space-y-1">
+                      <div>Full Name</div>
+                      <Input 
+                        placeholder="Filter..." 
+                        className="h-8 w-full" 
+                        value={filters.fullName}
+                        onChange={(e) => handleFilterChange('fullName', e.target.value)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="space-y-1">
+                      <div>Age</div>
+                      <Input 
+                        placeholder="Filter..." 
+                        className="h-8 w-full" 
+                        value={filters.dateOfBirth}
+                        onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="space-y-1">
+                      <div>Organization</div>
+                      <Input 
+                        placeholder="Filter..." 
+                        className="h-8 w-full" 
+                        value={filters.organization}
+                        onChange={(e) => handleFilterChange('organization', e.target.value)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="space-y-1">
+                      <div>Date of Birth</div>
+                      <Input 
+                        placeholder="YYYY-MM-DD" 
+                        className="h-8 w-full" 
+                        value={filters.dateOfBirth}
+                        onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="space-y-1">
+                      <div>Gender</div>
+                      <select 
+                        className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                        value={filters.gender}
+                        onChange={(e) => handleFilterChange('gender', e.target.value)}
+                      >
+                        <option value="">All</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                      </select>
+                    </div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="space-y-1">
+                      <div>Region</div>
+                      <Input 
+                        placeholder="Filter..." 
+                        className="h-8 w-full" 
+                        value={filters.region}
+                        onChange={(e) => handleFilterChange('region', e.target.value)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="space-y-1">
+                      <div>Constituency</div>
+                      <Input 
+                        placeholder="Filter..." 
+                        className="h-8 w-full" 
+                        value={filters.constituency}
+                        onChange={(e) => handleFilterChange('constituency', e.target.value)}
+                      />
+                    </div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="space-y-1">
+                      <div>ID Type</div>
+                      <select 
+                        className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                        value={filters.identificationType}
+                        onChange={(e) => handleFilterChange('identificationType', e.target.value)}
+                      >
+                        <option value="">All</option>
+                        <option value="birth_certificate">Birth Certificate</option>
+                        <option value="identification_document">ID Document</option>
+                        <option value="passport_number">Passport</option>
+                      </select>
+                    </div>
+                  </TableHead>
+                  <TableHead>
+                    <div className="space-y-1">
+                      <div>ID Number</div>
+                      <Input 
+                        placeholder="Filter..." 
+                        className="h-8 w-full" 
+                        value={filters.identificationNumber}
+                        onChange={(e) => handleFilterChange('identificationNumber', e.target.value)}
+                      />
+                    </div>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {filteredData.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={9} className="text-center py-4">
+                      No matching records found
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  filteredData.map((voter, index) => (
+                    <TableRow key={index}>
+                      <TableCell>{voter.fullName}</TableCell>
+                      <TableCell>
+                        {voter.dateOfBirth ? Math.floor((new Date().getTime() - voter.dateOfBirth.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : ''}
+                      </TableCell>
+                      <TableCell>{voter.organization}</TableCell>
+                      <TableCell>{voter.dateOfBirth ? format(voter.dateOfBirth, 'dd/MM/yyyy') : ''}</TableCell>
+                      <TableCell className="capitalize">{voter.gender || ''}</TableCell>
+                      <TableCell>{voter.region || ''}</TableCell>
+                      <TableCell>{voter.constituency || ''}</TableCell>
+                      <TableCell>
+                        {voter.identificationType === 'birth_certificate' ? 'Birth Certificate' : 
+                         voter.identificationType === 'identification_document' ? 'ID Document' :
+                         voter.identificationType === 'passport_number' ? 'Passport' : ''}
+                      </TableCell>
+                      <TableCell>{voter.identificationNumber}</TableCell>
+                    </TableRow>
+                  ))
+                )}
+              </TableBody>
+            </Table>
+          </div>
+          <div className="mt-4 text-sm text-gray-600">
+            <p>Showing {filteredData.length} of {mockVoterData.length} registrations</p>
+          </div>
+        </Card>
         
         {/* Constituency Details */}
         <Card className="p-6 mb-8">
