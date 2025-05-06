@@ -21,6 +21,7 @@ const initialFormData: VoterFormData = {
   organization: '',
   region: null,
   constituency: null,
+  identificationType: null,
   identificationNumber: '',
 };
 
@@ -121,6 +122,14 @@ const MultiStepForm = () => {
         setCurrentStep('identification');
         break;
       case 'identification':
+        if (!formData.identificationType) {
+          toast({
+            title: "Missing Document Type",
+            description: "Please select an identification document type before continuing",
+            variant: "destructive",
+          });
+          return;
+        }
         if (!formData.identificationNumber || formData.identificationNumber.length < 5) {
           toast({
             title: "Invalid ID Number",
@@ -199,7 +208,8 @@ const MultiStepForm = () => {
         />;
       case 'identification':
         return <IdentificationStep 
-          idNumber={formData.identificationNumber} 
+          idNumber={formData.identificationNumber}
+          idType={formData.identificationType}
           updateFormData={updateFormData} 
         />;
       case 'complete':

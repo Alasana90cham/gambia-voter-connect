@@ -17,6 +17,7 @@ export interface VoterFormData {
   constituency: string | null;
   
   // ID verification
+  identificationType: 'birth_certificate' | 'identification_document' | 'passport_number' | null;
   identificationNumber: string;
 }
 

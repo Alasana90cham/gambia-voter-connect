@@ -1,4 +1,3 @@
-
 import { RegionConstituencies } from "../types/form";
 
 export const regionConstituencies: RegionConstituencies = {
@@ -8,7 +7,6 @@ export const regionConstituencies: RegionConstituencies = {
     "Banjul North"
   ],
   "Kanifing": [
-    "Kanifing",
     "Bakau",
     "Jeshwang",
     "Serekunda West",
