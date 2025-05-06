@@ -37,6 +37,11 @@ const MultiStepForm = () => {
     return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
+  const isBornBetween1990And2010 = (date: Date) => {
+    const year = date.getFullYear();
+    return year >= 1990 && year <= 2010;
+  };
+
   const handleNext = () => {
     switch (currentStep) {
       case 'declaration':
@@ -79,6 +84,14 @@ const MultiStepForm = () => {
           toast({
             title: "Organization Required",
             description: "Please provide the organization you represent",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (formData.dateOfBirth && !isBornBetween1990And2010(formData.dateOfBirth)) {
+          toast({
+            title: "Invalid Date of Birth",
+            description: "You must be born between 1990 and 2010 to register",
             variant: "destructive",
           });
           return;
@@ -161,11 +174,6 @@ const MultiStepForm = () => {
     setCurrentStep('complete');
   };
 
-  const handleReset = () => {
-    setFormData(initialFormData);
-    setCurrentStep('declaration');
-  };
-
   const renderStepContent = () => {
     switch (currentStep) {
       case 'declaration':
@@ -197,7 +205,7 @@ const MultiStepForm = () => {
       case 'complete':
         return <CompleteStep 
           formData={formData} 
-          onReset={handleReset} 
+          onReset={() => {}} 
         />;
       default:
         return null;

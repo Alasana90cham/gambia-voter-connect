@@ -75,8 +75,15 @@ export const regionConstituencies: RegionConstituencies = {
 // Mock database of registered emails to prevent duplicate registrations
 export const registeredEmails = new Set<string>();
 
-// Mock admin users
+// Mock admin users with passwords (in a real system, passwords would be hashed)
 export const adminUsers = [
-  { id: "admin1", email: "admin@nypg.org", isAdmin: true },
-  { id: "admin2", email: "director@nypg.org", isAdmin: true }
+  { id: "admin1", email: "admin@nypg.org", password: "admin123", isAdmin: true },
+  { id: "admin2", email: "director@nypg.org", password: "admin123", isAdmin: true }
 ];
+
+// Function to add a new admin user
+export const addAdminUser = (id: string, email: string, password: string) => {
+  const newAdmin = { id, email, password, isAdmin: true };
+  adminUsers.push(newAdmin);
+  return newAdmin;
+};

@@ -28,13 +28,14 @@ const IdentificationStep: React.FC<IdentificationStepProps> = ({
       
       <div className="space-y-4">
         <div>
-          <Label htmlFor="idNumber" className="mb-2 block">Identification Number</Label>
+          <Label htmlFor="idNumber" className="mb-2 block">Identification Number <span className="text-red-500">*</span></Label>
           <Input 
             id="idNumber"
             value={idNumber}
             onChange={(e) => updateFormData({ identificationNumber: e.target.value })}
             placeholder="Enter your ID number"
             className="w-full"
+            required
           />
           <p className="text-sm text-muted-foreground mt-1">
             Enter your National ID card number, passport number, or other government-issued ID.

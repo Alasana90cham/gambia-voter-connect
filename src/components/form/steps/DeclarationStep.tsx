@@ -15,12 +15,12 @@ const DeclarationStep: React.FC<DeclarationStepProps> = ({ agreeToTerms, updateF
       
       <div className="bg-blue-50 p-4 rounded-md mb-6">
         <p className="text-gray-700 mb-4">
-          This form will be used for voter registration purposes in The Gambia. By proceeding, 
-          you acknowledge that the information provided is accurate and true.
+          This form will be used for voter registration purposes for the National Youth Parliament Gambia. 
+          By proceeding, you acknowledge that the information provided is accurate and true.
         </p>
         
         <p className="text-gray-700 mb-4">
-          The Electoral Commission of The Gambia is committed to protecting your personal information
+          The NYPG is committed to protecting your personal information
           and will use it solely for the purpose of voter registration and electoral processes.
         </p>
       </div>
@@ -30,11 +30,12 @@ const DeclarationStep: React.FC<DeclarationStepProps> = ({ agreeToTerms, updateF
           id="terms" 
           checked={agreeToTerms}
           onCheckedChange={(checked) => updateFormData({ agreeToTerms: checked as boolean })}
+          className="mt-1"
         />
         <div className="grid gap-1.5 leading-none">
           <Label htmlFor="terms" className="text-base">
             I agree to the terms and conditions of using this platform for voter registration purposes
-            and confirm that all information I provide will be accurate and true.
+            and confirm that all information I provide will be accurate and true. <span className="text-red-500">*</span>
           </Label>
           <p className="text-sm text-muted-foreground">
             This acknowledgment is required to proceed with the registration.

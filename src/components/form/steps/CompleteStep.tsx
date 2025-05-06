@@ -1,10 +1,9 @@
 
 import React from 'react';
-import { CheckCircle } from 'lucide-react';
+import { CheckCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VoterFormData } from '@/types/form';
 import { format } from 'date-fns';
-import { Link } from 'react-router-dom';
 
 interface CompleteStepProps {
   formData: VoterFormData;
@@ -12,6 +11,34 @@ interface CompleteStepProps {
 }
 
 const CompleteStep: React.FC<CompleteStepProps> = ({ formData, onReset }) => {
+  const handleDownloadProfile = () => {
+    // Create profile text content
+    const profileContent = `
+NATIONAL YOUTH PARLIAMENT GAMBIA - VOTER REGISTRATION PROFILE
+-----------------------------------------------------
+Full Name: ${formData.fullName}
+Date of Birth: ${formData.dateOfBirth ? format(formData.dateOfBirth, 'MMMM d, yyyy') : 'Not provided'}
+Gender: ${formData.gender ? formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1) : 'Not provided'}
+Organization: ${formData.organization}
+Region: ${formData.region}
+Constituency: ${formData.constituency}
+ID Number: ${formData.identificationNumber.substring(0, 2)}****${formData.identificationNumber.substring(formData.identificationNumber.length - 2)}
+-----------------------------------------------------
+IMPORTANT: Please bring this document and your ID on election day.
+    `;
+    
+    // Create a blob and download it
+    const blob = new Blob([profileContent], { type: 'text/plain' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `NYPG_Voter_Profile_${formData.fullName.replace(/\s+/g, '_')}.txt`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+  };
+
   return (
     <div className="text-center">
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-6">
@@ -22,6 +49,12 @@ const CompleteStep: React.FC<CompleteStepProps> = ({ formData, onReset }) => {
       <p className="text-gray-600 mb-6">
         Thank you for registering as a voter. Your information has been successfully submitted.
       </p>
+      
+      <div className="bg-yellow-50 p-4 rounded-md border border-yellow-200 mb-6">
+        <p className="text-amber-800 font-medium">
+          Important Reminder: On election day, please bring the same identification document you used for this registration.
+        </p>
+      </div>
       
       <div className="bg-gray-50 rounded-lg p-6 text-left mb-6">
         <h3 className="font-semibold text-lg mb-3 text-gray-800">Registration Summary</h3>
@@ -35,6 +68,9 @@ const CompleteStep: React.FC<CompleteStepProps> = ({ formData, onReset }) => {
           </div>
           <div>
             <span className="font-medium">Gender:</span> {formData.gender ? formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1) : 'Not provided'}
+          </div>
+          <div>
+            <span className="font-medium">Organization:</span> {formData.organization}
           </div>
           <div>
             <span className="font-medium">Region:</span> {formData.region}
@@ -51,14 +87,13 @@ const CompleteStep: React.FC<CompleteStepProps> = ({ formData, onReset }) => {
       </div>
       
       <div className="flex flex-col sm:flex-row justify-center gap-4">
-        <Button onClick={onReset} className="bg-primary hover:bg-primary/90">
-          Register Another Voter
+        <Button 
+          onClick={handleDownloadProfile} 
+          className="flex items-center gap-2 bg-primary hover:bg-primary/90"
+        >
+          <Download size={18} />
+          Download Your Profile
         </Button>
-        <Link to="/statistics">
-          <Button variant="outline" className="border-primary text-primary hover:bg-primary/10">
-            View Registration Statistics
-          </Button>
-        </Link>
       </div>
     </div>
   );

@@ -17,14 +17,12 @@ interface PersonalInfoStepProps {
 }
 
 const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFormData }) => {
-  // Calculate max date (18 years ago from today)
-  const today = new Date();
-  const maxDate = new Date(today.getFullYear() - 18, today.getMonth(), today.getDate());
-  const minDate = new Date(1900, 0, 1); // Minimum date (January 1, 1900)
+  // Calculate min/max date for date restrictions (1990-2010)
+  const minDate = new Date(1990, 0, 1);
+  const maxDate = new Date(2010, 11, 31);
   
-  // Calculate a reasonable default year to show in the calendar
-  // This will show around 30 years ago, which is a common adult age
-  const defaultCalendarDate = new Date(today.getFullYear() - 30, 0, 1);
+  // Default calendar date to show in the middle of the allowed range
+  const defaultCalendarDate = new Date(2000, 0, 1);
   
   return (
     <div>
@@ -32,18 +30,19 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
       
       <div className="space-y-6">
         <div className="space-y-2">
-          <Label htmlFor="fullName">Full Name</Label>
+          <Label htmlFor="fullName">Full Name <span className="text-red-500">*</span></Label>
           <Input 
             id="fullName" 
             placeholder="Enter your full name"
             value={formData.fullName}
             onChange={(e) => updateFormData({ fullName: e.target.value })}
             className="w-full"
+            required
           />
         </div>
 
         <div className="space-y-2">
-          <Label htmlFor="email">Email Address</Label>
+          <Label htmlFor="email">Email Address <span className="text-red-500">*</span></Label>
           <Input 
             id="email" 
             type="email"
@@ -51,6 +50,7 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
             value={formData.email || ''}
             onChange={(e) => updateFormData({ email: e.target.value })}
             className="w-full"
+            required
           />
           <p className="text-sm text-muted-foreground">
             Your email will be used to prevent duplicate registrations.
@@ -58,13 +58,14 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="organization">Organization</Label>
+          <Label htmlFor="organization">Organization <span className="text-red-500">*</span></Label>
           <Input 
             id="organization" 
             placeholder="Enter your organization"
             value={formData.organization || ''}
             onChange={(e) => updateFormData({ organization: e.target.value })}
             className="w-full"
+            required
           />
           <p className="text-sm text-muted-foreground">
             Please provide the organization you represent.
@@ -72,7 +73,7 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
         </div>
         
         <div className="space-y-2">
-          <Label htmlFor="dob">Date of Birth</Label>
+          <Label htmlFor="dob">Date of Birth <span className="text-red-500">*</span></Label>
           <div className="flex flex-col">
             <Popover>
               <PopoverTrigger asChild>
@@ -97,23 +98,24 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
                   mode="single"
                   selected={formData.dateOfBirth || undefined}
                   onSelect={(date) => updateFormData({ dateOfBirth: date })}
-                  disabled={(date) => date > maxDate || date < minDate}
+                  disabled={(date) => date < minDate || date > maxDate}
                   defaultMonth={formData.dateOfBirth || defaultCalendarDate}
                   initialFocus
                   captionLayout="dropdown-buttons"
-                  fromYear={1900}
-                  toYear={maxDate.getFullYear()}
+                  fromYear={1990}
+                  toYear={2010}
+                  className="pointer-events-auto"
                 />
               </PopoverContent>
             </Popover>
             <p className="text-sm text-muted-foreground mt-1">
-              You must be at least 18 years old to register as a voter.
+              You must be born between 1990 and 2010 to register as a voter.
             </p>
           </div>
         </div>
 
         <div className="space-y-2">
-          <Label>Gender</Label>
+          <Label>Gender <span className="text-red-500">*</span></Label>
           <RadioGroup 
             value={formData.gender || ''} 
             onValueChange={(value) => updateFormData({ gender: value as 'male' | 'female' })}
