@@ -5,10 +5,10 @@ export interface VoterFormData {
   
   // Personal Information
   fullName: string;
-  email: string; // Added email field
+  email: string;
   dateOfBirth: Date | null;
   gender: 'male' | 'female' | null;
-  organization: string; // Added organization field
+  organization: string;
   
   // Region
   region: GambiaRegion | null;
@@ -18,7 +18,7 @@ export interface VoterFormData {
   
   // ID verification
   identificationType: 'birth_certificate' | 'identification_document' | 'passport_number' | null;
-  identificationNumber: string;
+  identificationNumber: string; // We'll validate this as numeric in the UI
 }
 
 export type GambiaRegion = 
@@ -45,6 +45,6 @@ export interface RegionConstituencies {
 export interface UserRole {
   id: string;
   email: string;
-  password?: string; // Added to support deletion
+  password?: string;
   isAdmin: boolean;
 }

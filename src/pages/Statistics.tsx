@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import Header from '@/components/Header';
@@ -6,7 +6,7 @@ import Footer from '@/components/Footer';
 import { adminUsers, addAdminUser } from '@/data/constituencies';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
-import { Download, UserPlus, Filter, Search, Trash2 } from 'lucide-react';
+import { Download, UserPlus, Filter, Search, Trash2, Printer } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
@@ -163,6 +163,9 @@ const Statistics = () => {
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
   const [selectedRegion, setSelectedRegion] = useState('Banjul');
+  
+  // Add tableRef for printing
+  const tableRef = useRef<HTMLDivElement>(null);
   
   // New admin form state
   const [newAdminEmail, setNewAdminEmail] = useState('');
@@ -335,24 +338,24 @@ const Statistics = () => {
     });
   };
   
-  // Handle Excel export
+  // Handle Excel export with current filters applied
   const handleExcelExport = () => {
     // In a real application, this would generate a proper Excel file
     // using a library like xlsx or exceljs with real data from the database
     
-    // For demonstration, we'll create a CSV string with mock data
-    const headers = "Region,Constituency,Male,Female,Total\n";
+    // For demonstration, we'll create a CSV string with the filtered data
+    const headers = "Full Name,Age,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
     let csvContent = headers;
     
-    // Add some mock data rows
-    Object.keys(constituencyData).forEach(region => {
-      constituencyData[region].forEach(constituency => {
-        // Generate random male/female numbers that add up to the constituency value
-        const male = Math.floor(Math.random() * constituency.value);
-        const female = constituency.value - male;
-        
-        csvContent += `${region},${constituency.name},${male},${female},${constituency.value}\n`;
-      });
+    // Add the filtered data rows
+    filteredData.forEach(voter => {
+      const age = voter.dateOfBirth ? Math.floor((new Date().getTime() - voter.dateOfBirth.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : '';
+      const dob = voter.dateOfBirth ? format(voter.dateOfBirth, 'dd/MM/yyyy') : '';
+      const idType = voter.identificationType === 'birth_certificate' ? 'Birth Certificate' : 
+                     voter.identificationType === 'identification_document' ? 'ID Document' :
+                     voter.identificationType === 'passport_number' ? 'Passport' : '';
+      
+      csvContent += `"${voter.fullName}",${age},"${voter.organization}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identificationNumber}"\n`;
     });
     
     // Create a blob and trigger download
@@ -368,8 +371,67 @@ const Statistics = () => {
     
     toast({
       title: "Export Successful",
-      description: "Voter statistics have been exported to Excel format",
+      description: `${filteredData.length} records have been exported to CSV format`,
     });
+  };
+  
+  // Handle print function
+  const handlePrint = () => {
+    if (tableRef.current) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write('<html><head><title>Voter Registration Data</title>');
+        printWindow.document.write('<style>');
+        printWindow.document.write('table { border-collapse: collapse; width: 100%; }');
+        printWindow.document.write('th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }');
+        printWindow.document.write('th { background-color: #f2f2f2; }');
+        printWindow.document.write('</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write('<h1>NYPG Voter Registration Data</h1>');
+        printWindow.document.write('<h3>Exported on ' + new Date().toLocaleDateString() + '</h3>');
+        printWindow.document.write('<table>');
+        
+        // Table headers
+        printWindow.document.write('<tr>');
+        printWindow.document.write('<th>Full Name</th>');
+        printWindow.document.write('<th>Age</th>');
+        printWindow.document.write('<th>Organization</th>');
+        printWindow.document.write('<th>Date of Birth</th>');
+        printWindow.document.write('<th>Gender</th>');
+        printWindow.document.write('<th>Region</th>');
+        printWindow.document.write('<th>Constituency</th>');
+        printWindow.document.write('<th>ID Type</th>');
+        printWindow.document.write('<th>ID Number</th>');
+        printWindow.document.write('</tr>');
+        
+        // Table data
+        filteredData.forEach(voter => {
+          const age = voter.dateOfBirth ? Math.floor((new Date().getTime() - voter.dateOfBirth.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : '';
+          const dob = voter.dateOfBirth ? format(voter.dateOfBirth, 'dd/MM/yyyy') : '';
+          const idType = voter.identificationType === 'birth_certificate' ? 'Birth Certificate' : 
+                         voter.identificationType === 'identification_document' ? 'ID Document' :
+                         voter.identificationType === 'passport_number' ? 'Passport' : '';
+          
+          printWindow.document.write('<tr>');
+          printWindow.document.write(`<td>${voter.fullName}</td>`);
+          printWindow.document.write(`<td>${age}</td>`);
+          printWindow.document.write(`<td>${voter.organization}</td>`);
+          printWindow.document.write(`<td>${dob}</td>`);
+          printWindow.document.write(`<td>${voter.gender || ''}</td>`);
+          printWindow.document.write(`<td>${voter.region || ''}</td>`);
+          printWindow.document.write(`<td>${voter.constituency || ''}</td>`);
+          printWindow.document.write(`<td>${idType}</td>`);
+          printWindow.document.write(`<td>${voter.identificationNumber}</td>`);
+          printWindow.document.write('</tr>');
+        });
+        
+        printWindow.document.write('</table>');
+        printWindow.document.write('<p>Total records: ' + filteredData.length + '</p>');
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
   };
 
   if (!isAdmin) {
@@ -398,9 +460,8 @@ const Statistics = () => {
                   type="email" 
                   value={email}
                   onChange={(e) => setEmail(e.target.value)}
-                  placeholder="admin@nypg.org"
+                  placeholder="Enter admin email"
                 />
-                <p className="text-sm text-muted-foreground mt-1">Default: admin@nypg.org</p>
               </div>
               
               <div>
@@ -412,7 +473,6 @@ const Statistics = () => {
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Enter your password"
                 />
-                <p className="text-sm text-muted-foreground mt-1">Default: admin123</p>
               </div>
               
               <Button className="w-full" onClick={handleLogin}>
@@ -441,7 +501,14 @@ const Statistics = () => {
               className="flex items-center gap-2"
             >
               <Download size={18} />
-              Export to Excel
+              Export CSV
+            </Button>
+            <Button 
+              onClick={handlePrint}
+              className="flex items-center gap-2"
+            >
+              <Printer size={18} />
+              Print
             </Button>
           </div>
         </div>
@@ -520,10 +587,18 @@ const Statistics = () => {
                 <Filter size={16} />
                 Clear Filters
               </Button>
+              <Button variant="outline" onClick={handleExcelExport} className="flex items-center gap-2">
+                <Download size={16} />
+                Export CSV
+              </Button>
+              <Button variant="outline" onClick={handlePrint} className="flex items-center gap-2">
+                <Printer size={16} />
+                Print
+              </Button>
             </div>
           </div>
           
-          <div className="overflow-x-auto">
+          <div className="overflow-x-auto" ref={tableRef}>
             <Table>
               <TableHeader>
                 <TableRow>
@@ -545,6 +620,7 @@ const Statistics = () => {
                         placeholder="Filter age..." 
                         className="h-8 w-full" 
                         type="number"
+                        min="0"
                         value={filters.dateOfBirth}
                         onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
                       />
@@ -566,7 +642,8 @@ const Statistics = () => {
                       <div>Date of Birth</div>
                       <Input 
                         placeholder="YYYY-MM-DD" 
-                        className="h-8 w-full" 
+                        className="h-8 w-full"
+                        pattern="\d{4}-\d{2}-\d{2}"
                         value={filters.dateOfBirth}
                         onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
                       />
@@ -643,7 +720,9 @@ const Statistics = () => {
                       <div>ID Number</div>
                       <Input 
                         placeholder="Filter ID..." 
-                        className="h-8 w-full" 
+                        className="h-8 w-full"
+                        pattern="[0-9]*" 
+                        inputMode="numeric"
                         value={filters.identificationNumber}
                         onChange={(e) => handleFilterChange('identificationNumber', e.target.value)}
                       />
