@@ -5,8 +5,10 @@ export interface VoterFormData {
   
   // Personal Information
   fullName: string;
+  email: string; // Added email field
   dateOfBirth: Date | null;
   gender: 'male' | 'female' | null;
+  organization: string; // Added organization field
   
   // Region
   region: GambiaRegion | null;
@@ -37,4 +39,10 @@ export type FormStep =
 
 export interface RegionConstituencies {
   [key: string]: string[];
+}
+
+export interface UserRole {
+  id: string;
+  email: string;
+  isAdmin: boolean;
 }

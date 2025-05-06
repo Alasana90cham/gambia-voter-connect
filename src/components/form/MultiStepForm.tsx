@@ -2,6 +2,7 @@
 import React, { useState } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { FormStep, VoterFormData } from '@/types/form';
+import { registeredEmails } from '@/data/constituencies';
 
 import DeclarationStep from './steps/DeclarationStep';
 import PersonalInfoStep from './steps/PersonalInfoStep';
@@ -14,8 +15,10 @@ import ProgressBar from './ProgressBar';
 const initialFormData: VoterFormData = {
   agreeToTerms: false,
   fullName: '',
+  email: '',
   dateOfBirth: null,
   gender: null,
+  organization: '',
   region: null,
   constituency: null,
   identificationNumber: '',
@@ -28,6 +31,10 @@ const MultiStepForm = () => {
 
   const updateFormData = (data: Partial<VoterFormData>) => {
     setFormData(prev => ({ ...prev, ...data }));
+  };
+
+  const isEmailValid = (email: string) => {
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
   };
 
   const handleNext = () => {
@@ -47,7 +54,31 @@ const MultiStepForm = () => {
         if (!formData.fullName || !formData.dateOfBirth || !formData.gender) {
           toast({
             title: "Missing Information",
-            description: "Please complete all fields before continuing",
+            description: "Please complete all required fields before continuing",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!formData.email || !isEmailValid(formData.email)) {
+          toast({
+            title: "Invalid Email",
+            description: "Please provide a valid email address",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (registeredEmails.has(formData.email.toLowerCase())) {
+          toast({
+            title: "Duplicate Registration",
+            description: "This email has already been registered",
+            variant: "destructive",
+          });
+          return;
+        }
+        if (!formData.organization) {
+          toast({
+            title: "Organization Required",
+            description: "Please provide the organization you represent",
             variant: "destructive",
           });
           return;
@@ -112,8 +143,13 @@ const MultiStepForm = () => {
   };
 
   const handleSubmit = () => {
-    // Here we would normally send the data to the server
+    // In a real application, we would send the data to the server
     console.log("Form submitted:", formData);
+    
+    // Add email to the registered list to prevent duplicate registrations
+    if (formData.email) {
+      registeredEmails.add(formData.email.toLowerCase());
+    }
     
     // Show success message
     toast({

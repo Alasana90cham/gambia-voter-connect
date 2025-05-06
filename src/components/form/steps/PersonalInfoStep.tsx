@@ -41,6 +41,35 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
             className="w-full"
           />
         </div>
+
+        <div className="space-y-2">
+          <Label htmlFor="email">Email Address</Label>
+          <Input 
+            id="email" 
+            type="email"
+            placeholder="Enter your email address"
+            value={formData.email || ''}
+            onChange={(e) => updateFormData({ email: e.target.value })}
+            className="w-full"
+          />
+          <p className="text-sm text-muted-foreground">
+            Your email will be used to prevent duplicate registrations.
+          </p>
+        </div>
+        
+        <div className="space-y-2">
+          <Label htmlFor="organization">Organization</Label>
+          <Input 
+            id="organization" 
+            placeholder="Enter your organization"
+            value={formData.organization || ''}
+            onChange={(e) => updateFormData({ organization: e.target.value })}
+            className="w-full"
+          />
+          <p className="text-sm text-muted-foreground">
+            Please provide the organization you represent.
+          </p>
+        </div>
         
         <div className="space-y-2">
           <Label htmlFor="dob">Date of Birth</Label>
