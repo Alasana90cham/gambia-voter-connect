@@ -1,163 +1,67 @@
+import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
+import { supabase } from "@/integrations/supabase/client";
+import { format } from "date-fns";
 
-import { RegionConstituencies, UserRole } from "../types/form";
-import { supabase } from "../integrations/supabase/client";
-
-export const regionConstituencies: RegionConstituencies = {
-  "Banjul": [
-    "Banjul South",
-    "Banjul Central", 
-    "Banjul North"
+export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
+  'Banjul': [
+    'Banjul Central',
+    'Banjul North',
+    'Banjul South'
   ],
-  "Kanifing": [
-    "Bakau",
-    "Jeshwang",
-    "Serekunda West",
-    "Bundungka Kunda",
-    "Latrikunda Sabijie",
-    "Talinding Kunjang"
+  'Kanifing': [
+    'Bakau',
+    'Coastal Road',
+    'Kololi',
+    'Latrikunda Sabiji',
+    'Manjai Kunda',
+    'Pipeline',
+    'Serekunda',
+    'Talinding Kunjang',
+    'Bundung Six Junction'
   ],
-  "West Coast": [
-    "Foni Jarrol",
-    "Foni Brefet",
-    "Foni Bintang",
-    "Foni Bondali",
-    "Foni Kansala",
-    "Kombo East",
-    "Kombo South",
-    "Brikama North",
-    "Brikama South",
-    "Sanneh Mentereng",
-    "Old Yundum",
-    "Busumbala"
+  'West Coast': [
+    'Brikama North',
+    'Brikama South',
+    'Busumbala',
+    'Kombo Central',
+    'Kombo East',
+    'Kombo North',
+    'Old Yundum'
   ],
-  "North Bank": [
-    "Lower Nuimi",
-    "Upper Nuimi",
-    "Jokadu",
-    "Lower Baddibu",
-    "Central Baddibu",
-    "Illiassa",
-    "Sabach Sanjal"
+  'North Bank': [
+    'Essau',
+    'Jokadu',
+    'Lower Baddibu',
+    'Upper Baddibu'
   ],
-  "Lower River": [
-    "Jarra West",
-    "Jarra East",
-    "Jarra Central",
-    "Kiang West",
-    "Kiang East",
-    "Kiang Central"
+  'Lower River': [
+    'Jarra Central',
+    'Jarra East',
+    'Jarra West',
+    'Kiang Central',
+    'Kiang East',
+    'Kiang West'
   ],
-  "Central River": [
-    "Janjanbureh",
-    "Niani",
-    "Nianija",
-    "Niamina West",
-    "Niamina East",
-    "Niamina Dankunku",
-    "Lower Fulladu West",
-    "Upper Fulladu West",
-    "Lower Saloum",
-    "Upper Saloum",
-    "Sami"
+  'Central River': [
+    'Fulladu West',
+    'Janjanbureh',
+    'Niani',
+    'Nianija',
+    'Sami',
+    'Upper Saloum',
+    'Lower Saloum'
   ],
-  "Upper River": [
-    "Basse",
-    "Jimara",
-    "Tumana",
-    "Kantora",
-    "Sandu",
-    "Wulli West",
-    "Wulli East"
+  'Upper River': [
+    'Basse',
+    'Jimara',
+    'Kantora',
+    'Tumana',
+    'Wuli East',
+    'Wuli West'
   ]
 };
 
-// Track registered emails in memory during the session
-export const registeredEmails = new Set<string>();
-
-// Check if an email exists in the database
-export const checkIfEmailExists = async (email: string): Promise<boolean> => {
-  try {
-    const { data, error } = await supabase
-      .from('voters')
-      .select('email')
-      .eq('email', email.toLowerCase())
-      .single();
-    
-    if (error && error.code !== 'PGRST116') { // PGRST116 means not found
-      console.error("Error checking email:", error);
-      return false;
-    }
-    
-    return !!data;
-  } catch (err) {
-    console.error("Error checking email:", err);
-    return false;
-  }
-};
-
-// Function to fetch all admins
-export const fetchAdmins = async (): Promise<UserRole[]> => {
-  try {
-    const { data, error } = await supabase
-      .from('admins')
-      .select('*');
-      
-    if (error) {
-      console.error("Error fetching admins:", error);
-      return [];
-    }
-    
-    return data || [];
-  } catch (err) {
-    console.error("Error fetching admins:", err);
-    return [];
-  }
-};
-
-// Function to add a new admin user
-export const addAdminUser = async (id: string, email: string, password: string): Promise<UserRole | null> => {
-  try {
-    const newAdmin = { id, email, password, isAdmin: true };
-    
-    const { data, error } = await supabase
-      .from('admins')
-      .insert([newAdmin])
-      .select()
-      .single();
-      
-    if (error) {
-      console.error("Error adding admin:", error);
-      return null;
-    }
-    
-    return data;
-  } catch (err) {
-    console.error("Error adding admin:", err);
-    return null;
-  }
-};
-
-// Function to remove an admin user
-export const removeAdminUser = async (id: string): Promise<boolean> => {
-  try {
-    const { error } = await supabase
-      .from('admins')
-      .delete()
-      .eq('id', id);
-      
-    if (error) {
-      console.error("Error removing admin:", error);
-      return false;
-    }
-    
-    return true;
-  } catch (err) {
-    console.error("Error removing admin:", err);
-    return false;
-  }
-};
-
-// Function to verify admin login
+// Supabase functions for admin authentication and data fetching
 export const verifyAdminLogin = async (email: string, password: string): Promise<boolean> => {
   try {
     const { data, error } = await supabase
@@ -167,19 +71,95 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
       .eq('password', password)
       .single();
       
-    if (error) {
-      console.error("Error verifying admin:", error);
+    if (error || !data) {
+      console.error("Login error:", error);
       return false;
     }
     
-    return !!data;
-  } catch (err) {
-    console.error("Error verifying admin:", err);
+    // Store admin session info in localStorage
+    localStorage.setItem('adminSession', JSON.stringify({
+      email: data.email,
+      id: data.id,
+      timestamp: new Date().toISOString()
+    }));
+    
+    return true;
+  } catch (error) {
+    console.error("Error during login:", error);
     return false;
   }
 };
 
-// Function to fetch voter data
+export const fetchAdmins = async (): Promise<UserRole[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('admins')
+      .select('*');
+      
+    if (error) {
+      throw error;
+    }
+    
+    // Convert the data from Supabase to match our UserRole type
+    return data.map((admin: any) => ({
+      id: admin.id,
+      email: admin.email,
+      isAdmin: admin.is_admin,
+      password: admin.password // Note: In production, passwords should not be sent to client
+    }));
+  } catch (error) {
+    console.error("Error fetching admins:", error);
+    return [];
+  }
+};
+
+export const addAdminUser = async (id: string, email: string, password: string): Promise<UserRole | null> => {
+  try {
+    const { data, error } = await supabase
+      .from('admins')
+      .insert([{
+        id,
+        email,
+        password,
+        is_admin: true
+      }])
+      .select('*')
+      .single();
+      
+    if (error) {
+      throw error;
+    }
+    
+    return {
+      id: data.id,
+      email: data.email,
+      isAdmin: data.is_admin,
+      password: data.password
+    };
+  } catch (error) {
+    console.error("Error adding admin:", error);
+    return null;
+  }
+};
+
+export const removeAdminUser = async (id: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('admins')
+      .delete()
+      .eq('id', id);
+      
+    if (error) {
+      throw error;
+    }
+    
+    return true;
+  } catch (error) {
+    console.error("Error deleting admin:", error);
+    return false;
+  }
+};
+
 export const fetchVoterData = async () => {
   try {
     const { data, error } = await supabase
@@ -187,13 +167,48 @@ export const fetchVoterData = async () => {
       .select('*');
       
     if (error) {
-      console.error("Error fetching voter data:", error);
-      return [];
+      throw error;
     }
     
-    return data || [];
-  } catch (err) {
-    console.error("Error fetching voter data:", err);
+    return data;
+  } catch (error) {
+    console.error("Error fetching voter data:", error);
     return [];
+  }
+};
+
+export const submitVoterRegistration = async (formData: VoterFormData) => {
+  try {
+    // Format the Date object to a string for database storage
+    const formattedData = {
+      ...formData,
+      date_of_birth: formData.dateOfBirth ? format(formData.dateOfBirth, 'yyyy-MM-dd') : null,
+      agree_to_terms: formData.agreeToTerms
+    };
+    
+    const { data, error } = await supabase
+      .from('voters')
+      .insert({
+        full_name: formData.fullName,
+        email: formData.email,
+        date_of_birth: format(formData.dateOfBirth as Date, 'yyyy-MM-dd'),
+        gender: formData.gender,
+        organization: formData.organization,
+        region: formData.region,
+        constituency: formData.constituency,
+        identification_type: formData.identificationType,
+        identification_number: formData.identificationNumber,
+        agree_to_terms: formData.agreeToTerms
+      })
+      .select();
+      
+    if (error) {
+      throw error;
+    }
+    
+    return data;
+  } catch (error) {
+    console.error("Error submitting registration:", error);
+    throw error;
   }
 };

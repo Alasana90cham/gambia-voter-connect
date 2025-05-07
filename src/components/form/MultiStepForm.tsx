@@ -1,16 +1,39 @@
-import React, { useState } from 'react';
-import { useToast } from "@/components/ui/use-toast";
-import { FormStep, VoterFormData } from '@/types/form';
-import { checkIfEmailExists, registeredEmails } from '@/data/constituencies';
-import { supabase } from '@/integrations/supabase/client';
-
+import React, { useState, useCallback, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { FormStep, VoterFormData, GambiaRegion } from '@/types/form';
+import ProgressBar from './ProgressBar';
 import DeclarationStep from './steps/DeclarationStep';
 import PersonalInfoStep from './steps/PersonalInfoStep';
 import RegionStep from './steps/RegionStep';
 import ConstituencyStep from './steps/ConstituencyStep';
 import IdentificationStep from './steps/IdentificationStep';
 import CompleteStep from './steps/CompleteStep';
-import ProgressBar from './ProgressBar';
+import { toast } from '@/components/ui/use-toast';
+import { ArrowLeftIcon, ArrowRightIcon } from 'lucide-react';
+import { submitVoterRegistration } from '@/data/constituencies';
+
+interface Props {
+  onComplete?: () => void;
+}
+
+const steps: FormStep[] = [
+  'declaration',
+  'personal',
+  'region',
+  'constituency',
+  'identification',
+  'complete',
+];
+
+const stepLabels: Record<FormStep, string> = {
+  'declaration': 'Terms & Conditions',
+  'personal': 'Personal Information',
+  'region': 'Region Selection',
+  'constituency': 'Constituency',
+  'identification': 'Verification',
+  'complete': 'Complete',
+};
 
 const initialFormData: VoterFormData = {
   agreeToTerms: false,
@@ -25,299 +48,167 @@ const initialFormData: VoterFormData = {
   identificationNumber: '',
 };
 
-const MultiStepForm = () => {
+const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState<FormStep>('declaration');
   const [formData, setFormData] = useState<VoterFormData>(initialFormData);
-  const { toast } = useToast();
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const currentStepIndex = steps.indexOf(currentStep);
 
-  const updateFormData = (data: Partial<VoterFormData>) => {
+  const updateFormData = useCallback((data: Partial<VoterFormData>) => {
     setFormData(prev => ({ ...prev, ...data }));
-  };
+  }, []);
 
-  const isEmailValid = (email: string) => {
-    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
-  };
-
-  const isBornBetween1990And2010 = (date: Date) => {
-    const year = date.getFullYear();
-    return year >= 1990 && year <= 2010;
-  };
-
-  const handleNext = async () => {
+  const isNextDisabled = useCallback(() => {
     switch (currentStep) {
       case 'declaration':
-        if (!formData.agreeToTerms) {
-          toast({
-            title: "Agreement Required",
-            description: "You must agree to the terms to continue",
-            variant: "destructive",
-          });
-          return;
-        }
-        setCurrentStep('personal');
-        break;
+        return !formData.agreeToTerms;
       case 'personal':
-        if (!formData.fullName || !formData.dateOfBirth || !formData.gender) {
-          toast({
-            title: "Missing Information",
-            description: "Please complete all required fields before continuing",
-            variant: "destructive",
-          });
-          return;
-        }
-        if (!formData.email || !isEmailValid(formData.email)) {
-          toast({
-            title: "Invalid Email",
-            description: "Please provide a valid email address",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        // Check if email is already registered in the database
-        const emailExists = await checkIfEmailExists(formData.email);
-        if (emailExists || registeredEmails.has(formData.email.toLowerCase())) {
-          toast({
-            title: "Duplicate Registration",
-            description: "This email has already been registered",
-            variant: "destructive",
-          });
-          return;
-        }
-        
-        if (!formData.organization) {
-          toast({
-            title: "Organization Required",
-            description: "Please provide the organization you represent",
-            variant: "destructive",
-          });
-          return;
-        }
-        if (formData.dateOfBirth && !isBornBetween1990And2010(formData.dateOfBirth)) {
-          toast({
-            title: "Invalid Date of Birth",
-            description: "You must be born between 1990 and 2010 to register",
-            variant: "destructive",
-          });
-          return;
-        }
-        setCurrentStep('region');
-        break;
+        return !formData.fullName || !formData.email || !formData.dateOfBirth || !formData.gender || !formData.organization;
       case 'region':
-        if (!formData.region) {
-          toast({
-            title: "Missing Selection",
-            description: "Please select your region before continuing",
-            variant: "destructive",
-          });
-          return;
-        }
-        setCurrentStep('constituency');
-        break;
+        return !formData.region;
       case 'constituency':
-        if (!formData.constituency) {
-          toast({
-            title: "Missing Selection",
-            description: "Please select your constituency before continuing",
-            variant: "destructive",
-          });
-          return;
-        }
-        setCurrentStep('identification');
-        break;
+        return !formData.constituency;
       case 'identification':
-        if (!formData.identificationType) {
-          toast({
-            title: "Missing Document Type",
-            description: "Please select an identification document type before continuing",
-            variant: "destructive",
-          });
-          return;
-        }
-        if (!formData.identificationNumber || formData.identificationNumber.length < 5) {
-          toast({
-            title: "Invalid ID Number",
-            description: "Please enter a valid identification number",
-            variant: "destructive",
-          });
-          return;
-        }
-        handleSubmit();
-        break;
+        return !formData.identificationType || !formData.identificationNumber;
       default:
-        break;
+        return false;
     }
-  };
+  }, [currentStep, formData]);
 
-  const handleBack = () => {
-    switch (currentStep) {
-      case 'personal':
-        setCurrentStep('declaration');
-        break;
-      case 'region':
-        setCurrentStep('personal');
-        break;
-      case 'constituency':
-        setCurrentStep('region');
-        break;
-      case 'identification':
-        setCurrentStep('constituency');
-        break;
-      default:
-        break;
-    }
-  };
-
-  const handleSubmit = async () => {
-    if (isSubmitting) return;
-    
-    setIsSubmitting(true);
-    
-    try {
-      // Format the data for submission
-      const submissionData = {
-        full_name: formData.fullName,
-        email: formData.email.toLowerCase(),
-        date_of_birth: formData.dateOfBirth,
-        gender: formData.gender,
-        organization: formData.organization,
-        region: formData.region,
-        constituency: formData.constituency,
-        identification_type: formData.identificationType,
-        identification_number: formData.identificationNumber,
-        agree_to_terms: formData.agreeToTerms
-      };
-      
-      // Insert data into Supabase
-      const { error } = await supabase
-        .from('voters')
-        .insert([submissionData]);
-      
-      if (error) {
-        console.error("Error submitting form:", error);
+  const goToNextStep = async () => {
+    // If we're on the identification step (last step before complete)
+    if (currentStep === 'identification') {
+      try {
+        setIsSubmitting(true);
+        
+        // Submit the form data to the API
+        await submitVoterRegistration(formData);
+        
+        // Move to complete step after successful submission
+        setCurrentStep('complete');
+      } catch (error) {
+        console.error('Error submitting form:', error);
         toast({
-          title: "Submission Error",
-          description: "There was an error submitting your registration. Please try again.",
-          variant: "destructive",
+          title: 'Registration Failed',
+          description: 'There was an error submitting your registration. Please try again.',
+          variant: 'destructive',
         });
+      } finally {
         setIsSubmitting(false);
-        return;
       }
-      
-      // Add email to local cache to prevent duplicate registrations in the same session
-      if (formData.email) {
-        registeredEmails.add(formData.email.toLowerCase());
-      }
-      
-      // Show success message
-      toast({
-        title: "Registration Complete",
-        description: "Your voter registration has been submitted successfully!",
-      });
-      
-      // Move to completion step
-      setCurrentStep('complete');
-    } catch (err) {
-      console.error("Error submitting form:", err);
-      toast({
-        title: "Submission Error",
-        description: "There was an error submitting your registration. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      const nextStep = steps[currentStepIndex + 1];
+      setCurrentStep(nextStep);
     }
   };
 
-  const renderStepContent = () => {
+  const goToPreviousStep = () => {
+    if (currentStepIndex > 0) {
+      const prevStep = steps[currentStepIndex - 1];
+      setCurrentStep(prevStep);
+    }
+  };
+
+  const handleComplete = () => {
+    if (onComplete) {
+      onComplete();
+    }
+    // Reset form data when complete
+    setFormData(initialFormData);
+    setCurrentStep('declaration');
+  };
+
+  const renderCurrentStep = () => {
     switch (currentStep) {
       case 'declaration':
-        return <DeclarationStep 
-          agreeToTerms={formData.agreeToTerms} 
-          updateFormData={updateFormData} 
-        />;
+        return (
+          <DeclarationStep 
+            agreed={formData.agreeToTerms}
+            updateFormData={updateFormData}
+          />
+        );
       case 'personal':
-        return <PersonalInfoStep 
-          formData={formData} 
-          updateFormData={updateFormData} 
-        />;
+        return (
+          <PersonalInfoStep
+            fullName={formData.fullName}
+            email={formData.email}
+            dateOfBirth={formData.dateOfBirth}
+            gender={formData.gender}
+            organization={formData.organization}
+            updateFormData={updateFormData}
+          />
+        );
       case 'region':
-        return <RegionStep 
-          selectedRegion={formData.region} 
-          updateFormData={updateFormData} 
-        />;
+        return (
+          <RegionStep
+            selectedRegion={formData.region}
+            updateFormData={updateFormData}
+          />
+        );
       case 'constituency':
-        return <ConstituencyStep 
-          region={formData.region!} 
-          selectedConstituency={formData.constituency} 
-          updateFormData={updateFormData} 
-        />;
+        return (
+          <ConstituencyStep
+            region={formData.region as GambiaRegion}
+            selectedConstituency={formData.constituency}
+            updateFormData={updateFormData}
+          />
+        );
       case 'identification':
-        return <IdentificationStep 
-          idNumber={formData.identificationNumber}
-          idType={formData.identificationType}
-          updateFormData={updateFormData} 
-        />;
+        return (
+          <IdentificationStep
+            selectedType={formData.identificationType}
+            idNumber={formData.identificationNumber}
+            updateFormData={updateFormData}
+          />
+        );
       case 'complete':
-        return <CompleteStep 
-          formData={formData} 
-          onReset={() => {}} 
-        />;
+        return <CompleteStep onComplete={handleComplete} />;
       default:
-        return null;
-    }
-  };
-
-  // Calculate step number for progress bar
-  const getStepNumber = () => {
-    switch(currentStep) {
-      case 'declaration': return 1;
-      case 'personal': return 2;
-      case 'region': return 3;
-      case 'constituency': return 4;
-      case 'identification': return 5;
-      case 'complete': return 6;
-      default: return 1;
+        return <div>Unknown step</div>;
     }
   };
 
   return (
-    <div className="multi-step-form animate-fade-in p-6 bg-white rounded-lg shadow-md">
-      {currentStep !== 'complete' && (
-        <ProgressBar currentStep={getStepNumber()} totalSteps={5} />
-      )}
-
-      <div className="form-section my-6">
-        {renderStepContent()}
-      </div>
-
-      {currentStep !== 'complete' && (
-        <div className="flex justify-between mt-8">
-          {currentStep !== 'declaration' ? (
-            <button
-              type="button"
-              onClick={handleBack}
-              className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 transition"
-            >
-              Back
-            </button>
-          ) : (
-            <div></div>
-          )}
-          <button
-            type="button"
-            onClick={handleNext}
-            disabled={isSubmitting}
-            className={`px-6 py-2 bg-primary text-white rounded hover:bg-primary/90 transition ${
-              isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
-            }`}
-          >
-            {currentStep === 'identification' ? (isSubmitting ? 'Submitting...' : 'Submit') : 'Next'}
-          </button>
+    <Card className="w-full max-w-3xl mx-auto">
+      <div className="p-6">
+        {currentStep !== 'complete' && (
+          <>
+            <h2 className="text-xl font-bold mb-2">Registration Step: {stepLabels[currentStep]}</h2>
+            <ProgressBar 
+              currentStep={currentStepIndex} 
+              totalSteps={steps.length - 1} 
+            />
+          </>
+        )}
+        
+        <div className="mt-6">
+          {renderCurrentStep()}
         </div>
-      )}
-    </div>
+        
+        {currentStep !== 'complete' && (
+          <div className="mt-6 flex justify-between">
+            <Button
+              variant="outline"
+              onClick={goToPreviousStep}
+              disabled={currentStepIndex === 0}
+              className="gap-2"
+            >
+              <ArrowLeftIcon size={16} />
+              Back
+            </Button>
+            
+            <Button
+              onClick={goToNextStep}
+              disabled={isNextDisabled() || isSubmitting}
+              className="gap-2"
+            >
+              {isSubmitting ? 'Submitting...' : currentStep === 'identification' ? 'Submit' : 'Next'}
+              {!isSubmitting && <ArrowRightIcon size={16} />}
+            </Button>
+          </div>
+        )}
+      </div>
+    </Card>
   );
 };
 
