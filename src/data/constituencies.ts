@@ -65,8 +65,8 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
 // Supabase functions for admin authentication and data fetching
 export const verifyAdminLogin = async (email: string, password: string): Promise<boolean> => {
   try {
-    // Use raw SQL query to avoid RLS issues
-    // This bypasses RLS policies by using service role and direct SQL query
+    console.log("Calling admin_login function with email:", email);
+    
     const { data, error } = await supabase.rpc('admin_login', { 
       admin_email: email, 
       admin_password: password 
@@ -76,6 +76,8 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
       console.error("Login error:", error);
       return false;
     }
+    
+    console.log("Login result:", data);
     
     // The function will return true if login is successful
     if (data) {
@@ -97,13 +99,18 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
 
 export const fetchAdmins = async (): Promise<UserRole[]> => {
   try {
+    console.log("Fetching admins...");
+    
     const { data, error } = await supabase
       .from('admins')
       .select('*');
       
     if (error) {
+      console.error("Error fetching admins:", error);
       throw error;
     }
+    
+    console.log("Admins fetched:", data);
     
     // Convert the data from Supabase to match our UserRole type
     return data.map((admin: any) => ({
@@ -120,6 +127,8 @@ export const fetchAdmins = async (): Promise<UserRole[]> => {
 
 export const addAdminUser = async (id: string, email: string, password: string): Promise<UserRole | null> => {
   try {
+    console.log("Adding admin:", { id, email });
+    
     const { data, error } = await supabase
       .from('admins')
       .insert([{
@@ -132,8 +141,11 @@ export const addAdminUser = async (id: string, email: string, password: string):
       .single();
       
     if (error) {
+      console.error("Error adding admin:", error);
       throw error;
     }
+    
+    console.log("Admin added:", data);
     
     return {
       id: data.id,
@@ -149,14 +161,19 @@ export const addAdminUser = async (id: string, email: string, password: string):
 
 export const removeAdminUser = async (id: string): Promise<boolean> => {
   try {
+    console.log("Removing admin with ID:", id);
+    
     const { error } = await supabase
       .from('admins')
       .delete()
       .eq('id', id);
       
     if (error) {
+      console.error("Error deleting admin:", error);
       throw error;
     }
+    
+    console.log("Admin deleted successfully");
     
     return true;
   } catch (error) {
@@ -167,15 +184,20 @@ export const removeAdminUser = async (id: string): Promise<boolean> => {
 
 export const fetchVoterData = async () => {
   try {
+    console.log("Fetching voter data...");
+    
     const { data, error } = await supabase
       .from('voters')
       .select('*');
       
     if (error) {
+      console.error("Error fetching voter data:", error);
       throw error;
     }
     
-    return data;
+    console.log("Voter data fetched:", data?.length || 0, "records");
+    
+    return data || [];
   } catch (error) {
     console.error("Error fetching voter data:", error);
     return [];
@@ -184,6 +206,8 @@ export const fetchVoterData = async () => {
 
 export const submitVoterRegistration = async (formData: VoterFormData) => {
   try {
+    console.log("Submitting voter registration:", formData);
+    
     // Format the Date object to a string for database storage
     const formattedData = {
       ...formData,
@@ -208,8 +232,11 @@ export const submitVoterRegistration = async (formData: VoterFormData) => {
       .select();
       
     if (error) {
+      console.error("Error submitting registration:", error);
       throw error;
     }
+    
+    console.log("Registration submitted successfully:", data);
     
     return data;
   } catch (error) {

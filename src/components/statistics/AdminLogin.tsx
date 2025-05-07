@@ -23,9 +23,12 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
     }
     
     setIsLoading(true);
+    setLoginError('');
     
     try {
+      console.log("Attempting login with:", { email });
       const isValid = await verifyAdminLogin(email, password);
+      console.log("Login result:", isValid);
       
       if (isValid) {
         toast({
@@ -33,13 +36,22 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
           description: "Welcome to the admin dashboard",
         });
         onLoginSuccess();
-        setLoginError('');
       } else {
         setLoginError('Invalid email or password');
+        toast({
+          title: "Login failed",
+          description: "Invalid email or password",
+          variant: "destructive",
+        });
       }
     } catch (error) {
       console.error("Login error:", error);
       setLoginError('An error occurred during login. Please try again later.');
+      toast({
+        title: "Login error",
+        description: "An error occurred during login",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }

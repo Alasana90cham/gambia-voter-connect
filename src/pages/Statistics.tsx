@@ -48,7 +48,60 @@ const Statistics = () => {
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
   
-  // Fetch voter data and prepare chart data
+  // Process data for charts
+  const processChartData = (voters: any[]) => {
+    if (!voters || voters.length === 0) return;
+    
+    // Process gender data
+    const genderCounts: Record<string, number> = {};
+    voters.forEach((voter: any) => {
+      const gender = voter.gender || 'Unknown';
+      genderCounts[gender] = (genderCounts[gender] || 0) + 1;
+    });
+    
+    const genderChartData = Object.keys(genderCounts).map(gender => ({
+      name: gender.charAt(0).toUpperCase() + gender.slice(1), // Capitalize
+      value: genderCounts[gender]
+    }));
+    setGenderData(genderChartData);
+    
+    // Process region data
+    const regionCounts: Record<string, number> = {};
+    voters.forEach((voter: any) => {
+      const region = voter.region || 'Unknown';
+      regionCounts[region] = (regionCounts[region] || 0) + 1;
+    });
+    
+    const regionChartData = Object.keys(regionCounts).map(region => ({
+      name: region,
+      value: regionCounts[region]
+    }));
+    setRegionData(regionChartData);
+    
+    // Process constituency data
+    const constituenciesByRegion: Record<string, Record<string, number>> = {};
+    voters.forEach((voter: any) => {
+      const region = voter.region || 'Unknown';
+      const constituency = voter.constituency || 'Unknown';
+      
+      if (!constituenciesByRegion[region]) {
+        constituenciesByRegion[region] = {};
+      }
+      
+      constituenciesByRegion[region][constituency] = (constituenciesByRegion[region][constituency] || 0) + 1;
+    });
+    
+    const constituencyChartData: {[key: string]: { name: string; value: number }[]} = {};
+    Object.keys(constituenciesByRegion).forEach(region => {
+      constituencyChartData[region] = Object.keys(constituenciesByRegion[region]).map(constituency => ({
+        name: constituency,
+        value: constituenciesByRegion[region][constituency]
+      }));
+    });
+    setConstituencyData(constituencyChartData);
+  };
+  
+  // Fetch voter data
   const loadVoterData = async () => {
     setIsLoading(true);
     
@@ -56,61 +109,13 @@ const Statistics = () => {
       const voters = await fetchVoterData();
       setVoterData(voters);
       setFilteredData(voters);
+      processChartData(voters);
       
-      if (voters && voters.length > 0) {
-        // Process gender data
-        const genderCounts: Record<string, number> = {};
-        voters.forEach((voter: any) => {
-          const gender = voter.gender || 'Unknown';
-          genderCounts[gender] = (genderCounts[gender] || 0) + 1;
-        });
-        
-        const genderChartData = Object.keys(genderCounts).map(gender => ({
-          name: gender.charAt(0).toUpperCase() + gender.slice(1), // Capitalize
-          value: genderCounts[gender]
-        }));
-        setGenderData(genderChartData);
-        
-        // Process region data
-        const regionCounts: Record<string, number> = {};
-        voters.forEach((voter: any) => {
-          const region = voter.region || 'Unknown';
-          regionCounts[region] = (regionCounts[region] || 0) + 1;
-        });
-        
-        const regionChartData = Object.keys(regionCounts).map(region => ({
-          name: region,
-          value: regionCounts[region]
-        }));
-        setRegionData(regionChartData);
-        
-        // Process constituency data
-        const constituenciesByRegion: Record<string, Record<string, number>> = {};
-        voters.forEach((voter: any) => {
-          const region = voter.region || 'Unknown';
-          const constituency = voter.constituency || 'Unknown';
-          
-          if (!constituenciesByRegion[region]) {
-            constituenciesByRegion[region] = {};
-          }
-          
-          constituenciesByRegion[region][constituency] = (constituenciesByRegion[region][constituency] || 0) + 1;
-        });
-        
-        const constituencyChartData: {[key: string]: { name: string; value: number }[]} = {};
-        Object.keys(constituenciesByRegion).forEach(region => {
-          constituencyChartData[region] = Object.keys(constituenciesByRegion[region]).map(constituency => ({
-            name: constituency,
-            value: constituenciesByRegion[region][constituency]
-          }));
-        });
-        setConstituencyData(constituencyChartData);
-      }
     } catch (error) {
       console.error("Error loading voter data:", error);
       toast({
         title: "Data Loading Error",
-        description: "Failed to load voter registration data",
+        description: "Failed to load voter registration data. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -118,43 +123,70 @@ const Statistics = () => {
     }
   };
   
-  // Load admins
+  // Load admins with error handling
   const loadAdmins = async () => {
     try {
       const admins = await fetchAdmins();
-      setAdminList(admins);
+      setAdminList(admins || []);
     } catch (error) {
       console.error("Error loading admins:", error);
+      toast({
+        title: "Admin Data Error",
+        description: "Failed to load admin information",
+        variant: "destructive",
+      });
     }
   };
   
-  // Subscribe to realtime updates for admins
-  const subscribeToAdmins = () => {
-    const adminChannel = supabase
+  // Subscribe to realtime updates
+  const setupRealtimeSubscriptions = () => {
+    // Create a channel for admins table
+    const adminsChannel = supabase
       .channel('admin-changes')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'admins' 
-      }, () => {
+      }, (payload) => {
+        console.log('Admin change received:', payload);
         // Reload admins when any change happens
         loadAdmins();
       })
-      .subscribe();
+      .subscribe((status) => {
+        console.log('Admins subscription status:', status);
+      });
+    
+    // Create a channel for voters table
+    const votersChannel = supabase
+      .channel('voters-changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'voters' 
+      }, (payload) => {
+        console.log('Voter change received:', payload);
+        // Reload voter data when any change happens
+        loadVoterData();
+      })
+      .subscribe((status) => {
+        console.log('Voters subscription status:', status);
+      });
       
     return () => {
-      supabase.removeChannel(adminChannel);
+      supabase.removeChannel(adminsChannel);
+      supabase.removeChannel(votersChannel);
     };
   };
   
   // Initial data loading
   useEffect(() => {
     if (isAdmin) {
+      // Load initial data
       loadVoterData();
       loadAdmins();
       
-      // Subscribe to realtime updates
-      const unsubscribe = subscribeToAdmins();
+      // Set up realtime subscriptions
+      const unsubscribe = setupRealtimeSubscriptions();
       
       return () => {
         unsubscribe();
@@ -170,13 +202,13 @@ const Statistics = () => {
     
     if (filters.fullName) {
       result = result.filter(voter => 
-        voter.full_name.toLowerCase().includes(filters.fullName.toLowerCase())
+        voter.full_name && voter.full_name.toLowerCase().includes(filters.fullName.toLowerCase())
       );
     }
     
     if (filters.organization) {
       result = result.filter(voter => 
-        voter.organization.toLowerCase().includes(filters.organization.toLowerCase())
+        voter.organization && voter.organization.toLowerCase().includes(filters.organization.toLowerCase())
       );
     }
     
@@ -212,7 +244,7 @@ const Statistics = () => {
     
     if (filters.identificationNumber) {
       result = result.filter(voter => 
-        voter.identification_number.includes(filters.identificationNumber)
+        voter.identification_number && voter.identification_number.includes(filters.identificationNumber)
       );
     }
     
@@ -235,7 +267,7 @@ const Statistics = () => {
                     voter.identification_type === 'identification_document' ? 'ID Document' :
                     voter.identification_type === 'passport_number' ? 'Passport' : '';
       
-      csvContent += `"${voter.full_name}","${voter.email}","${voter.organization}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number}"\n`;
+      csvContent += `"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"\n`;
     });
     
     // Create a blob and trigger download
@@ -255,6 +287,7 @@ const Statistics = () => {
     });
   };
 
+  // Component rendering based on authentication state
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex flex-col">
