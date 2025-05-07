@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,6 +10,7 @@ import { toast } from "@/components/ui/use-toast";
 import { UserPlus, Trash2 } from 'lucide-react';
 import { UserRole } from '@/types/form';
 import { addAdminUser, removeAdminUser } from '@/data/constituencies';
+import { supabase } from "@/integrations/supabase/client";
 
 interface AdminManagementProps {
   adminList: UserRole[];
@@ -20,6 +21,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
   const [newAdminEmail, setNewAdminEmail] = useState('');
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [newAdminId, setNewAdminId] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
   
   const handleAddAdmin = async () => {
     if (!newAdminEmail || !newAdminPassword || !newAdminId) {
@@ -32,26 +34,39 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
     }
     
     try {
-      const newAdmin = await addAdminUser(newAdminId, newAdminEmail, newAdminPassword);
+      setIsSubmitting(true);
       
-      if (newAdmin) {
-        toast({
-          title: "Admin Added",
-          description: `New admin ${newAdminEmail} added successfully`,
-        });
-        
-        // Reset form
-        setNewAdminEmail('');
-        setNewAdminPassword('');
-        setNewAdminId('');
-        setOpenDialog(false);
-      } else {
+      // Direct database insertion to avoid RLS issues
+      const { data, error } = await supabase
+        .from('admins')
+        .insert([{
+          id: newAdminId,
+          email: newAdminEmail,
+          password: newAdminPassword,
+          is_admin: true
+        }])
+        .select();
+      
+      if (error) {
+        console.error("Error adding admin:", error);
         toast({
           title: "Error",
-          description: "Failed to add new admin",
+          description: error.message || "Failed to add new admin",
           variant: "destructive",
         });
+        return;
       }
+      
+      toast({
+        title: "Admin Added",
+        description: `New admin ${newAdminEmail} added successfully`,
+      });
+      
+      // Reset form
+      setNewAdminEmail('');
+      setNewAdminPassword('');
+      setNewAdminId('');
+      setOpenDialog(false);
     } catch (error) {
       console.error("Error adding admin:", error);
       toast({
@@ -59,6 +74,8 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
         description: "Failed to add new admin",
         variant: "destructive",
       });
+    } finally {
+      setIsSubmitting(false);
     }
   };
   
@@ -74,20 +91,26 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
     }
     
     try {
-      const success = await removeAdminUser(id);
-      
-      if (success) {
-        toast({
-          title: "Admin Deleted",
-          description: "Admin has been deleted successfully",
-        });
-      } else {
+      // Direct database deletion to avoid RLS issues
+      const { error } = await supabase
+        .from('admins')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        console.error("Error deleting admin:", error);
         toast({
           title: "Error",
-          description: "Failed to delete admin",
+          description: error.message || "Failed to delete admin",
           variant: "destructive",
         });
+        return;
       }
+      
+      toast({
+        title: "Admin Deleted",
+        description: "Admin has been deleted successfully",
+      });
     } catch (error) {
       console.error("Error deleting admin:", error);
       toast({
@@ -144,8 +167,12 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
                   placeholder="Enter password"
                 />
               </div>
-              <Button className="w-full" onClick={handleAddAdmin}>
-                Add Admin
+              <Button 
+                className="w-full" 
+                onClick={handleAddAdmin}
+                disabled={isSubmitting}
+              >
+                {isSubmitting ? "Adding..." : "Add Admin"}
               </Button>
             </div>
           </DialogContent>

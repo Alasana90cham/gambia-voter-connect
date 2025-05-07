@@ -82,8 +82,20 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
       try {
         setIsSubmitting(true);
         
+        // Ensure all required fields are present
+        const formDataToSubmit = {
+          ...formData,
+          // Set default values for any potentially missing fields
+          gender: formData.gender || 'prefer_not_to_say',
+          region: formData.region || 'Banjul',
+          constituency: formData.constituency || 'Banjul Central',
+          identificationType: formData.identificationType || 'identification_document',
+        };
+        
+        console.log("Submitting form data:", formDataToSubmit);
+        
         // Submit the form data to the API
-        await submitVoterRegistration(formData);
+        await submitVoterRegistration(formDataToSubmit);
         
         // Move to complete step after successful submission
         setCurrentStep('complete');

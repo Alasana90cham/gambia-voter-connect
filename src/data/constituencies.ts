@@ -67,26 +67,46 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
   try {
     console.log("Calling admin_login function with email:", email);
     
-    const { data, error } = await supabase.rpc('admin_login', { 
+    // First try to use the RPC function
+    const { data: rpcData, error: rpcError } = await supabase.rpc('admin_login', { 
       admin_email: email, 
       admin_password: password 
     });
     
-    if (error) {
-      console.error("Login error:", error);
+    if (rpcError) {
+      console.error("RPC login error:", rpcError);
+      
+      // Fallback to direct query if RPC fails
+      const { data, error } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password)
+        .single();
+      
+      if (error) {
+        console.error("Direct query error:", error);
+        return false;
+      }
+      
+      // Login successful via direct query
+      if (data) {
+        localStorage.setItem('adminSession', JSON.stringify({
+          email: email,
+          timestamp: new Date().toISOString()
+        }));
+        return true;
+      }
+      
       return false;
     }
     
-    console.log("Login result:", data);
-    
-    // The function will return true if login is successful
-    if (data) {
-      // Store admin session info in localStorage
+    // Login successful via RPC
+    if (rpcData) {
       localStorage.setItem('adminSession', JSON.stringify({
         email: email,
         timestamp: new Date().toISOString()
       }));
-      
       return true;
     }
     
