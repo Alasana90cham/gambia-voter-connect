@@ -47,7 +47,7 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
             id="email" 
             type="email"
             placeholder="Enter your email address"
-            value={formData.email || ''}
+            value={formData.email}
             onChange={(e) => updateFormData({ email: e.target.value })}
             className="w-full"
             required
@@ -62,7 +62,7 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
           <Input 
             id="organization" 
             placeholder="Enter your organization"
-            value={formData.organization || ''}
+            value={formData.organization}
             onChange={(e) => updateFormData({ organization: e.target.value })}
             className="w-full"
             required

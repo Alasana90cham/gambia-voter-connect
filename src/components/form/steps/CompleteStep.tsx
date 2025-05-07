@@ -36,7 +36,7 @@ IMPORTANT: Please bring this document and your ID on election day.
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revokeObjectURL(url);
+    URL.revoObjectURL(url);
   };
 
   return (
@@ -93,6 +93,14 @@ IMPORTANT: Please bring this document and your ID on election day.
         >
           <Download size={18} />
           Download Your Profile
+        </Button>
+        
+        <Button 
+          onClick={onReset} 
+          variant="outline"
+          className="flex items-center gap-2"
+        >
+          Register Another Voter
         </Button>
       </div>
     </div>

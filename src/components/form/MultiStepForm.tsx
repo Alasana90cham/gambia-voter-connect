@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -123,18 +124,14 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
       case 'declaration':
         return (
           <DeclarationStep 
-            agreed={formData.agreeToTerms}
+            agreeToTerms={formData.agreeToTerms}
             updateFormData={updateFormData}
           />
         );
       case 'personal':
         return (
           <PersonalInfoStep
-            fullName={formData.fullName}
-            email={formData.email}
-            dateOfBirth={formData.dateOfBirth}
-            gender={formData.gender}
-            organization={formData.organization}
+            formData={formData}
             updateFormData={updateFormData}
           />
         );
@@ -156,13 +153,13 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
       case 'identification':
         return (
           <IdentificationStep
-            selectedType={formData.identificationType}
             idNumber={formData.identificationNumber}
+            idType={formData.identificationType}
             updateFormData={updateFormData}
           />
         );
       case 'complete':
-        return <CompleteStep onComplete={handleComplete} />;
+        return <CompleteStep formData={formData} onReset={handleComplete} />;
       default:
         return <div>Unknown step</div>;
     }
