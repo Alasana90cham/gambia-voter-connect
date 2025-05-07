@@ -11,14 +11,12 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
   ],
   'Kanifing': [
     'Bakau',
-    'Coastal Road',
-    'Kololi',
+    'Jeshwang',
     'Latrikunda Sabiji',
-    'Manjai Kunda',
-    'Pipeline',
     'Serekunda',
+    'Serrekunda West',
     'Talinding Kunjang',
-    'Bundung Six Junction'
+    'Bundung ka Kunda'
   ],
   'West Coast': [
     'Brikama North',
@@ -26,7 +24,8 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Busumbala',
     'Kombo Central',
     'Kombo East',
-    'Kombo North',
+    'Busumbala ',
+    'Sanneh Mentereng'
     'Old Yundum'
   ],
   'North Bank': [
