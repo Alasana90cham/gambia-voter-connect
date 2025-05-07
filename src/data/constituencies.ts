@@ -25,7 +25,7 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Kombo Central',
     'Kombo East',
     'Busumbala ',
-    'Sanneh Mentereng'
+    'Sanneh Mentereng',
     'Old Yundum'
   ],
   'North Bank': [
