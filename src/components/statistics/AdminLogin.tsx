@@ -4,6 +4,7 @@ import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { verifyAdminLogin } from '@/data/constituencies';
+import { toast } from '@/components/ui/use-toast';
 
 interface AdminLoginProps {
   onLoginSuccess: () => void;
@@ -13,6 +14,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [loginError, setLoginError] = useState('');
+  const [isLoading, setIsLoading] = useState(false);
 
   const handleLogin = async () => {
     if (!email || !password) {
@@ -20,10 +22,16 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
       return;
     }
     
+    setIsLoading(true);
+    
     try {
       const isValid = await verifyAdminLogin(email, password);
       
       if (isValid) {
+        toast({
+          title: "Login successful",
+          description: "Welcome to the admin dashboard",
+        });
         onLoginSuccess();
         setLoginError('');
       } else {
@@ -31,7 +39,15 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
       }
     } catch (error) {
       console.error("Login error:", error);
-      setLoginError('An error occurred during login');
+      setLoginError('An error occurred during login. Please try again later.');
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      handleLogin();
     }
   };
 
@@ -57,6 +73,7 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
             value={email}
             onChange={(e) => setEmail(e.target.value)}
             placeholder="Enter admin email"
+            onKeyPress={handleKeyPress}
           />
         </div>
         
@@ -68,11 +85,16 @@ const AdminLogin: React.FC<AdminLoginProps> = ({ onLoginSuccess }) => {
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             placeholder="Enter your password"
+            onKeyPress={handleKeyPress}
           />
         </div>
         
-        <Button className="w-full" onClick={handleLogin}>
-          Login
+        <Button 
+          className="w-full" 
+          onClick={handleLogin}
+          disabled={isLoading}
+        >
+          {isLoading ? "Logging in..." : "Login"}
         </Button>
       </div>
     </div>

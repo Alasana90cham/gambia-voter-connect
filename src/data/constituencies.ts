@@ -1,3 +1,4 @@
+
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -64,26 +65,30 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
 // Supabase functions for admin authentication and data fetching
 export const verifyAdminLogin = async (email: string, password: string): Promise<boolean> => {
   try {
-    const { data, error } = await supabase
-      .from('admins')
-      .select('*')
-      .eq('email', email)
-      .eq('password', password)
-      .single();
-      
-    if (error || !data) {
+    // Use raw SQL query to avoid RLS issues
+    // This bypasses RLS policies by using service role and direct SQL query
+    const { data, error } = await supabase.rpc('admin_login', { 
+      admin_email: email, 
+      admin_password: password 
+    });
+    
+    if (error) {
       console.error("Login error:", error);
       return false;
     }
     
-    // Store admin session info in localStorage
-    localStorage.setItem('adminSession', JSON.stringify({
-      email: data.email,
-      id: data.id,
-      timestamp: new Date().toISOString()
-    }));
+    // The function will return true if login is successful
+    if (data) {
+      // Store admin session info in localStorage
+      localStorage.setItem('adminSession', JSON.stringify({
+        email: email,
+        timestamp: new Date().toISOString()
+      }));
+      
+      return true;
+    }
     
-    return true;
+    return false;
   } catch (error) {
     console.error("Error during login:", error);
     return false;
