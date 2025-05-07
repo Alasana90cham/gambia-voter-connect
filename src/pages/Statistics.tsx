@@ -13,6 +13,18 @@ import { toast } from "@/components/ui/use-toast";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { VoterFormData } from "@/types/form";
 import { format } from "date-fns";
+import {
+  Command,
+  CommandEmpty,
+  CommandGroup,
+  CommandInput,
+  CommandItem,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 
 // Mock data - this would come from your database in a real app
 const genderData = [
@@ -300,8 +312,8 @@ const Statistics = () => {
       return;
     }
     
-    // Add new admin
-    const newAdmin = { id: newAdminId, email: newAdminEmail, password: newAdminPassword, isAdmin: true };
+    // Add new admin - using the function from constituencies.ts to ensure consistency
+    const newAdmin = addAdminUser(newAdminId, newAdminEmail, newAdminPassword);
     const updatedAdmins = [...adminList, newAdmin];
     setAdminList(updatedAdmins);
     
@@ -329,8 +341,13 @@ const Statistics = () => {
       return;
     }
     
+    // Filter out the admin from both the state and the actual adminUsers array
     const updatedAdmins = adminList.filter(admin => admin.id !== id);
     setAdminList(updatedAdmins);
+    
+    // Update the actual adminUsers array by reference
+    while (adminUsers.length > 0) adminUsers.pop();
+    updatedAdmins.forEach(admin => adminUsers.push(admin));
     
     toast({
       title: "Admin Deleted",
@@ -683,21 +700,61 @@ const Statistics = () => {
                   <TableHead>
                     <div className="space-y-1">
                       <div>Constituency</div>
-                      <select 
-                        className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
-                        value={filters.constituency}
-                        onChange={(e) => handleFilterChange('constituency', e.target.value)}
-                      >
-                        <option value="">All Constituencies</option>
-                        {/* Dynamically show constituencies based on selected region in filters */}
-                        {filters.region && 
-                          constituencyData[filters.region as keyof typeof constituencyData]?.map(item => (
-                            <option key={item.name} value={item.name}>
-                              {item.name}
-                            </option>
-                          ))
-                        }
-                      </select>
+                      <Popover open={constituencySearchOpen} onOpenChange={setConstituencySearchOpen}>
+                        <PopoverTrigger asChild>
+                          <Button 
+                            variant="outline" 
+                            role="combobox" 
+                            aria-expanded={constituencySearchOpen}
+                            className="h-8 w-full justify-between"
+                          >
+                            {filters.constituency || "All constituencies"}
+                            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                          </Button>
+                        </PopoverTrigger>
+                        <PopoverContent className="w-[200px] p-0">
+                          <Command>
+                            <CommandInput placeholder="Search constituency..." className="h-9" />
+                            <CommandEmpty>No constituency found.</CommandEmpty>
+                            <CommandGroup>
+                              <CommandItem
+                                onSelect={() => {
+                                  handleFilterChange('constituency', '');
+                                  setConstituencySearchOpen(false);
+                                }}
+                              >
+                                All Constituencies
+                              </CommandItem>
+                              {filters.region && 
+                                constituencyData[filters.region as keyof typeof constituencyData]?.map(item => (
+                                  <CommandItem
+                                    key={item.name}
+                                    onSelect={() => {
+                                      handleFilterChange('constituency', item.name);
+                                      setConstituencySearchOpen(false);
+                                    }}
+                                  >
+                                    {item.name}
+                                  </CommandItem>
+                                ))
+                              }
+                              {!filters.region &&
+                                Object.values(constituencyData).flat().map(item => (
+                                  <CommandItem
+                                    key={item.name}
+                                    onSelect={() => {
+                                      handleFilterChange('constituency', item.name);
+                                      setConstituencySearchOpen(false);
+                                    }}
+                                  >
+                                    {item.name}
+                                  </CommandItem>
+                                ))
+                              }
+                            </CommandGroup>
+                          </Command>
+                        </PopoverContent>
+                      </Popover>
                     </div>
                   </TableHead>
                   <TableHead>

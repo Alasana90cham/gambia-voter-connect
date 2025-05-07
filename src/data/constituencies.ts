@@ -85,3 +85,13 @@ export const addAdminUser = (id: string, email: string, password: string) => {
   adminUsers.push(newAdmin);
   return newAdmin;
 };
+
+// Function to remove an admin user
+export const removeAdminUser = (id: string) => {
+  const index = adminUsers.findIndex(admin => admin.id === id);
+  if (index !== -1) {
+    adminUsers.splice(index, 1);
+    return true;
+  }
+  return false;
+};
