@@ -36,7 +36,7 @@ IMPORTANT: Please bring this document and your ID on election day.
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
-    URL.revoObjectURL(url);
+    URL.revokeObjectURL(url);
   };
 
   return (
