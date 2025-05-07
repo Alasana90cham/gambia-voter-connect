@@ -1,8 +1,10 @@
+
 import React from 'react';
 import { CheckCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { VoterFormData } from '@/types/form';
 import { format } from 'date-fns';
+import { QRCodeSVG } from 'qrcode.react';
 
 interface CompleteStepProps {
   formData: VoterFormData;
@@ -10,12 +12,13 @@ interface CompleteStepProps {
 }
 
 const CompleteStep: React.FC<CompleteStepProps> = ({ formData, onReset }) => {
-  const handleDownloadProfile = () => {
+  // Generate voter profile text for QR code and download
+  const generateProfileText = () => {
     const maskedID = formData.identificationNumber
       ? `${formData.identificationNumber.substring(0, 2)}****${formData.identificationNumber.slice(-2)}`
       : 'Not provided';
 
-    const profileContent = `
+    return `
 NATIONAL YOUTH PARLIAMENT GAMBIA - VOTER REGISTRATION PROFILE
 -----------------------------------------------------
 Full Name: ${formData.fullName}
@@ -28,7 +31,10 @@ ID Number: ${maskedID}
 -----------------------------------------------------
 IMPORTANT: Please bring this document and your ID on election day.
     `;
+  };
 
+  const handleDownloadProfile = () => {
+    const profileContent = generateProfileText();
     const blob = new Blob([profileContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
 
@@ -76,6 +82,22 @@ IMPORTANT: Please bring this document and your ID on election day.
           <div><span className="font-medium">Region:</span> {formData.region}</div>
           <div><span className="font-medium">Constituency:</span> {formData.constituency}</div>
           <div><span className="font-medium">ID Number:</span> {maskedID}</div>
+        </div>
+      </div>
+
+      <div className="mx-auto mb-6 flex flex-col items-center">
+        <h3 className="font-semibold text-lg mb-3 text-gray-800">Your Voter QR Code</h3>
+        <p className="text-sm text-gray-600 mb-3">
+          Scan this code at the polling station for quick verification
+        </p>
+        <div className="bg-white p-4 rounded-lg shadow-md">
+          <QRCodeSVG 
+            value={generateProfileText()}
+            size={200}
+            level="H"
+            includeMargin={true}
+            className="mx-auto"
+          />
         </div>
       </div>
 
