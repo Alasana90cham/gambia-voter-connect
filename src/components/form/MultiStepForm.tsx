@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -82,11 +81,19 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
       try {
         setIsSubmitting(true);
         
-        // Ensure all required fields are present - fix the type issue here
+        // Make sure gender is always one of the allowed values
+        let validGender: 'male' | 'female';
+        if (formData.gender === 'male' || formData.gender === 'female') {
+          validGender = formData.gender;
+        } else {
+          // Default to male if somehow the gender is null
+          validGender = 'male';
+        }
+        
+        // Ensure all required fields are present
         const formDataToSubmit: VoterFormData = {
           ...formData,
-          // Use the correct type for gender
-          gender: formData.gender as 'male' | 'female',
+          gender: validGender,
           region: formData.region || 'Banjul',
           constituency: formData.constituency || 'Banjul Central',
           identificationType: formData.identificationType || 'identification_document',
@@ -99,6 +106,13 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
         
         // Move to complete step after successful submission
         setCurrentStep('complete');
+        
+        // Show success toast
+        toast({
+          title: 'Registration Successful',
+          description: 'Your voter registration has been submitted.',
+          variant: 'default',
+        });
       } catch (error) {
         console.error('Error submitting form:', error);
         toast({

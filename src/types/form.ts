@@ -1,4 +1,3 @@
-
 export interface VoterFormData {
   // Declaration section
   agreeToTerms: boolean;

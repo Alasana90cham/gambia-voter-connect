@@ -226,19 +226,17 @@ export const submitVoterRegistration = async (formData: VoterFormData) => {
   try {
     console.log("Submitting voter registration:", formData);
     
-    // Format the Date object to a string for database storage
-    const formattedData = {
-      ...formData,
-      date_of_birth: formData.dateOfBirth ? format(formData.dateOfBirth, 'yyyy-MM-dd') : null,
-      agree_to_terms: formData.agreeToTerms
-    };
+    if (!formData.dateOfBirth) {
+      throw new Error("Date of birth is required");
+    }
     
+    // Format the Date object to a string for database storage
     const { data, error } = await supabase
       .from('voters')
       .insert({
         full_name: formData.fullName,
         email: formData.email,
-        date_of_birth: format(formData.dateOfBirth as Date, 'yyyy-MM-dd'),
+        date_of_birth: format(formData.dateOfBirth, 'yyyy-MM-dd'),
         gender: formData.gender,
         organization: formData.organization,
         region: formData.region,
