@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -885,4 +886,100 @@ const Statistics = () => {
                 <h2 className="text-xl font-semibold">Admin Management</h2>
                 
                 <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-                  <Dialog
+                  <DialogTrigger asChild>
+                    <Button className="flex items-center gap-2">
+                      <UserPlus size={16} />
+                      Add Admin
+                    </Button>
+                  </DialogTrigger>
+                  <DialogContent>
+                    <DialogHeader>
+                      <DialogTitle>Add New Admin User</DialogTitle>
+                    </DialogHeader>
+                    <div className="space-y-4 py-4">
+                      <div>
+                        <Label htmlFor="admin-id">ID</Label>
+                        <Input 
+                          id="admin-id" 
+                          value={newAdminId}
+                          onChange={(e) => setNewAdminId(e.target.value)}
+                          placeholder="Enter unique ID"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="admin-email">Email</Label>
+                        <Input 
+                          id="admin-email" 
+                          type="email" 
+                          value={newAdminEmail}
+                          onChange={(e) => setNewAdminEmail(e.target.value)}
+                          placeholder="Enter admin email"
+                        />
+                      </div>
+                      <div>
+                        <Label htmlFor="admin-password">Password</Label>
+                        <Input 
+                          id="admin-password" 
+                          type="password" 
+                          value={newAdminPassword}
+                          onChange={(e) => setNewAdminPassword(e.target.value)}
+                          placeholder="Enter password"
+                        />
+                      </div>
+                      <Button className="w-full" onClick={handleAddAdmin}>
+                        Add Admin
+                      </Button>
+                    </div>
+                  </DialogContent>
+                </Dialog>
+              </div>
+              
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>ID</TableHead>
+                      <TableHead>Email</TableHead>
+                      <TableHead>Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {adminList.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={3} className="text-center py-4">
+                          No admin users found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      adminList.map((admin) => (
+                        <TableRow key={admin.id}>
+                          <TableCell>{admin.id}</TableCell>
+                          <TableCell>{admin.email}</TableCell>
+                          <TableCell>
+                            <Button 
+                              variant="ghost" 
+                              size="sm" 
+                              className="text-red-500 hover:text-red-700"
+                              onClick={() => handleDeleteAdmin(admin.id)}
+                            >
+                              <Trash2 size={16} />
+                              <span className="ml-2">Delete</span>
+                            </Button>
+                          </TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+            </Card>
+          </>
+        )}
+      </main>
+      
+      <Footer />
+    </div>
+  );
+};
+
+export default Statistics;
