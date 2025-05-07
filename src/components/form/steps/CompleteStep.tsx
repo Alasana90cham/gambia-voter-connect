@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { CheckCircle, Download } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -12,7 +11,10 @@ interface CompleteStepProps {
 
 const CompleteStep: React.FC<CompleteStepProps> = ({ formData, onReset }) => {
   const handleDownloadProfile = () => {
-    // Create profile text content
+    const maskedID = formData.identificationNumber
+      ? `${formData.identificationNumber.substring(0, 2)}****${formData.identificationNumber.slice(-2)}`
+      : 'Not provided';
+
     const profileContent = `
 NATIONAL YOUTH PARLIAMENT GAMBIA - VOTER REGISTRATION PROFILE
 -----------------------------------------------------
@@ -22,83 +24,76 @@ Gender: ${formData.gender ? formData.gender.charAt(0).toUpperCase() + formData.g
 Organization: ${formData.organization}
 Region: ${formData.region}
 Constituency: ${formData.constituency}
-ID Number: ${formData.identificationNumber.substring(0, 2)}****${formData.identificationNumber.substring(formData.identificationNumber.length - 2)}
+ID Number: ${maskedID}
 -----------------------------------------------------
 IMPORTANT: Please bring this document and your ID on election day.
     `;
-    
-    // Create a blob and download it
+
     const blob = new Blob([profileContent], { type: 'text/plain' });
     const url = URL.createObjectURL(blob);
+
+    const safeName = formData.fullName
+      .replace(/[^\w\s]/gi, '') // Remove non-word characters
+      .replace(/\s+/g, '_');    // Replace spaces with underscores
+
     const link = document.createElement('a');
     link.href = url;
-    link.download = `NYPG_Voter_Profile_${formData.fullName.replace(/\s+/g, '_')}.txt`;
+    link.download = `NYPG_Voter_Profile_${safeName}.txt`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
     URL.revokeObjectURL(url);
   };
 
+  const maskedID = formData.identificationNumber
+    ? `${formData.identificationNumber.substring(0, 2)}****${formData.identificationNumber.slice(-2)}`
+    : 'Not provided';
+
   return (
     <div className="text-center">
       <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-green-100 mb-6">
         <CheckCircle className="h-8 w-8 text-green-600" />
       </div>
-      
+
       <h2 className="text-2xl font-bold text-gray-800 mb-2">Registration Complete</h2>
       <p className="text-gray-600 mb-6">
         Thank you for registering as a voter. Your information has been successfully submitted.
       </p>
-      
+
       <div className="bg-yellow-50 p-4 rounded-md border border-yellow-200 mb-6">
         <p className="text-amber-800 font-medium">
           Important Reminder: On election day, please bring the same identification document you used for this registration.
         </p>
       </div>
-      
+
       <div className="bg-gray-50 rounded-lg p-6 text-left mb-6">
         <h3 className="font-semibold text-lg mb-3 text-gray-800">Registration Summary</h3>
-        
         <div className="space-y-2">
-          <div>
-            <span className="font-medium">Name:</span> {formData.fullName}
-          </div>
-          <div>
-            <span className="font-medium">Date of Birth:</span> {formData.dateOfBirth ? format(formData.dateOfBirth, 'PPP') : 'Not provided'}
-          </div>
-          <div>
-            <span className="font-medium">Gender:</span> {formData.gender ? formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1) : 'Not provided'}
-          </div>
-          <div>
-            <span className="font-medium">Organization:</span> {formData.organization}
-          </div>
-          <div>
-            <span className="font-medium">Region:</span> {formData.region}
-          </div>
-          <div>
-            <span className="font-medium">Constituency:</span> {formData.constituency}
-          </div>
-          <div>
-            <span className="font-medium">ID Number:</span> {formData.identificationNumber ? 
-              `${formData.identificationNumber.substring(0, 2)}****${formData.identificationNumber.substring(formData.identificationNumber.length - 2)}` : 
-              'Not provided'}
-          </div>
+          <div><span className="font-medium">Name:</span> {formData.fullName}</div>
+          <div><span className="font-medium">Date of Birth:</span> {formData.dateOfBirth ? format(formData.dateOfBirth, 'PPP') : 'Not provided'}</div>
+          <div><span className="font-medium">Gender:</span> {formData.gender ? formData.gender.charAt(0).toUpperCase() + formData.gender.slice(1) : 'Not provided'}</div>
+          <div><span className="font-medium">Organization:</span> {formData.organization}</div>
+          <div><span className="font-medium">Region:</span> {formData.region}</div>
+          <div><span className="font-medium">Constituency:</span> {formData.constituency}</div>
+          <div><span className="font-medium">ID Number:</span> {maskedID}</div>
         </div>
       </div>
-      
+
       <div className="flex flex-col sm:flex-row justify-center gap-4">
-        <Button 
-          onClick={handleDownloadProfile} 
+        <Button
+          onClick={handleDownloadProfile}
           className="flex items-center gap-2 bg-primary hover:bg-primary/90"
+          aria-label="Download your registration profile"
         >
           <Download size={18} />
           Download Your Profile
         </Button>
-        
-        <Button 
-          onClick={onReset} 
+
+        <Button
+          onClick={onReset}
           variant="outline"
           className="flex items-center gap-2"
+          aria-label="Register another voter"
         >
           Register Another Voter
         </Button>
