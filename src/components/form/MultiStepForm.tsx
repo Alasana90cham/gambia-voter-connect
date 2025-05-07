@@ -82,11 +82,11 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
       try {
         setIsSubmitting(true);
         
-        // Ensure all required fields are present
-        const formDataToSubmit = {
+        // Ensure all required fields are present - fix the type issue here
+        const formDataToSubmit: VoterFormData = {
           ...formData,
-          // Set default values for any potentially missing fields
-          gender: formData.gender || 'prefer_not_to_say',
+          // Use the correct type for gender
+          gender: formData.gender as 'male' | 'female',
           region: formData.region || 'Banjul',
           constituency: formData.constituency || 'Banjul Central',
           identificationType: formData.identificationType || 'identification_document',
