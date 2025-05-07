@@ -1,5 +1,6 @@
 
 import { RegionConstituencies, UserRole } from "../types/form";
+import { supabase } from "../integrations/supabase/client";
 
 export const regionConstituencies: RegionConstituencies = {
   "Banjul": [
@@ -70,28 +71,129 @@ export const regionConstituencies: RegionConstituencies = {
   ]
 };
 
-// Mock database of registered emails to prevent duplicate registrations
+// Track registered emails in memory during the session
 export const registeredEmails = new Set<string>();
 
-// Mock admin users with passwords (in a real system, passwords would be hashed)
-export const adminUsers: UserRole[] = [
-  { id: "admin1", email: "admin@nypg.org", password: "admin123", isAdmin: true },
-  { id: "admin2", email: "director@nypg.org", password: "admin123", isAdmin: true }
-];
+// Check if an email exists in the database
+export const checkIfEmailExists = async (email: string): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from('voters')
+      .select('email')
+      .eq('email', email.toLowerCase())
+      .single();
+    
+    if (error && error.code !== 'PGRST116') { // PGRST116 means not found
+      console.error("Error checking email:", error);
+      return false;
+    }
+    
+    return !!data;
+  } catch (err) {
+    console.error("Error checking email:", err);
+    return false;
+  }
+};
+
+// Function to fetch all admins
+export const fetchAdmins = async (): Promise<UserRole[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('admins')
+      .select('*');
+      
+    if (error) {
+      console.error("Error fetching admins:", error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching admins:", err);
+    return [];
+  }
+};
 
 // Function to add a new admin user
-export const addAdminUser = (id: string, email: string, password: string) => {
-  const newAdmin = { id, email, password, isAdmin: true };
-  adminUsers.push(newAdmin);
-  return newAdmin;
+export const addAdminUser = async (id: string, email: string, password: string): Promise<UserRole | null> => {
+  try {
+    const newAdmin = { id, email, password, isAdmin: true };
+    
+    const { data, error } = await supabase
+      .from('admins')
+      .insert([newAdmin])
+      .select()
+      .single();
+      
+    if (error) {
+      console.error("Error adding admin:", error);
+      return null;
+    }
+    
+    return data;
+  } catch (err) {
+    console.error("Error adding admin:", err);
+    return null;
+  }
 };
 
 // Function to remove an admin user
-export const removeAdminUser = (id: string) => {
-  const index = adminUsers.findIndex(admin => admin.id === id);
-  if (index !== -1) {
-    adminUsers.splice(index, 1);
+export const removeAdminUser = async (id: string): Promise<boolean> => {
+  try {
+    const { error } = await supabase
+      .from('admins')
+      .delete()
+      .eq('id', id);
+      
+    if (error) {
+      console.error("Error removing admin:", error);
+      return false;
+    }
+    
     return true;
+  } catch (err) {
+    console.error("Error removing admin:", err);
+    return false;
   }
-  return false;
+};
+
+// Function to verify admin login
+export const verifyAdminLogin = async (email: string, password: string): Promise<boolean> => {
+  try {
+    const { data, error } = await supabase
+      .from('admins')
+      .select('*')
+      .eq('email', email)
+      .eq('password', password)
+      .single();
+      
+    if (error) {
+      console.error("Error verifying admin:", error);
+      return false;
+    }
+    
+    return !!data;
+  } catch (err) {
+    console.error("Error verifying admin:", err);
+    return false;
+  }
+};
+
+// Function to fetch voter data
+export const fetchVoterData = async () => {
+  try {
+    const { data, error } = await supabase
+      .from('voters')
+      .select('*');
+      
+    if (error) {
+      console.error("Error fetching voter data:", error);
+      return [];
+    }
+    
+    return data || [];
+  } catch (err) {
+    console.error("Error fetching voter data:", err);
+    return [];
+  }
 };

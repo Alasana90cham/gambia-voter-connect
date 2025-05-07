@@ -1,9 +1,10 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { GambiaRegion } from '@/types/form';
 import { regionConstituencies } from '@/data/constituencies';
+import { Input } from '@/components/ui/input';
 
 interface ConstituencyStepProps {
   region: GambiaRegion;
@@ -17,6 +18,12 @@ const ConstituencyStep: React.FC<ConstituencyStepProps> = ({
   updateFormData 
 }) => {
   const constituencies = regionConstituencies[region] || [];
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Filter constituencies based on search term
+  const filteredConstituencies = constituencies.filter(constituency => 
+    constituency.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
     <div>
@@ -30,20 +37,33 @@ const ConstituencyStep: React.FC<ConstituencyStepProps> = ({
         </p>
       </div>
       
+      <div className="mb-4">
+        <Input 
+          placeholder="Search constituencies..." 
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full"
+        />
+      </div>
+      
       <div className="mt-4">
         <Label className="mb-3 block">Constituency</Label>
-        <RadioGroup 
-          value={selectedConstituency || ''} 
-          onValueChange={(value) => updateFormData({ constituency: value })}
-          className="grid gap-4"
-        >
-          {constituencies.map((constituency) => (
-            <div key={constituency} className="flex items-center space-x-2 bg-white p-3 rounded-md border hover:border-primary transition-all">
-              <RadioGroupItem value={constituency} id={constituency} />
-              <Label htmlFor={constituency} className="cursor-pointer w-full">{constituency}</Label>
-            </div>
-          ))}
-        </RadioGroup>
+        {filteredConstituencies.length === 0 ? (
+          <p className="text-gray-500 italic">No constituencies found matching your search</p>
+        ) : (
+          <RadioGroup 
+            value={selectedConstituency || ''} 
+            onValueChange={(value) => updateFormData({ constituency: value })}
+            className="grid gap-4"
+          >
+            {filteredConstituencies.map((constituency) => (
+              <div key={constituency} className="flex items-center space-x-2 bg-white p-3 rounded-md border hover:border-primary transition-all">
+                <RadioGroupItem value={constituency} id={constituency} />
+                <Label htmlFor={constituency} className="cursor-pointer w-full">{constituency}</Label>
+              </div>
+            ))}
+          </RadioGroup>
+        )}
       </div>
     </div>
   );

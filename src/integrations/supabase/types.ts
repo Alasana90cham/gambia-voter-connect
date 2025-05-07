@@ -9,7 +9,75 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
-      [_ in never]: never
+      admins: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          is_admin: boolean
+          password: string
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id: string
+          is_admin?: boolean
+          password: string
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          is_admin?: boolean
+          password?: string
+        }
+        Relationships: []
+      }
+      voters: {
+        Row: {
+          agree_to_terms: boolean
+          constituency: string
+          created_at: string
+          date_of_birth: string
+          email: string
+          full_name: string
+          gender: string
+          id: string
+          identification_number: string
+          identification_type: string
+          organization: string
+          region: string
+        }
+        Insert: {
+          agree_to_terms?: boolean
+          constituency: string
+          created_at?: string
+          date_of_birth: string
+          email: string
+          full_name: string
+          gender: string
+          id?: string
+          identification_number: string
+          identification_type: string
+          organization: string
+          region: string
+        }
+        Update: {
+          agree_to_terms?: boolean
+          constituency?: string
+          created_at?: string
+          date_of_birth?: string
+          email?: string
+          full_name?: string
+          gender?: string
+          id?: string
+          identification_number?: string
+          identification_type?: string
+          organization?: string
+          region?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

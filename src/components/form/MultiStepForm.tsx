@@ -1,8 +1,8 @@
-
 import React, { useState } from 'react';
 import { useToast } from "@/components/ui/use-toast";
 import { FormStep, VoterFormData } from '@/types/form';
-import { registeredEmails } from '@/data/constituencies';
+import { checkIfEmailExists, registeredEmails } from '@/data/constituencies';
+import { supabase } from '@/integrations/supabase/client';
 
 import DeclarationStep from './steps/DeclarationStep';
 import PersonalInfoStep from './steps/PersonalInfoStep';
@@ -29,6 +29,7 @@ const MultiStepForm = () => {
   const [currentStep, setCurrentStep] = useState<FormStep>('declaration');
   const [formData, setFormData] = useState<VoterFormData>(initialFormData);
   const { toast } = useToast();
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const updateFormData = (data: Partial<VoterFormData>) => {
     setFormData(prev => ({ ...prev, ...data }));
@@ -43,7 +44,7 @@ const MultiStepForm = () => {
     return year >= 1990 && year <= 2010;
   };
 
-  const handleNext = () => {
+  const handleNext = async () => {
     switch (currentStep) {
       case 'declaration':
         if (!formData.agreeToTerms) {
@@ -73,7 +74,10 @@ const MultiStepForm = () => {
           });
           return;
         }
-        if (registeredEmails.has(formData.email.toLowerCase())) {
+        
+        // Check if email is already registered in the database
+        const emailExists = await checkIfEmailExists(formData.email);
+        if (emailExists || registeredEmails.has(formData.email.toLowerCase())) {
           toast({
             title: "Duplicate Registration",
             description: "This email has already been registered",
@@ -81,6 +85,7 @@ const MultiStepForm = () => {
           });
           return;
         }
+        
         if (!formData.organization) {
           toast({
             title: "Organization Required",
@@ -164,23 +169,65 @@ const MultiStepForm = () => {
     }
   };
 
-  const handleSubmit = () => {
-    // In a real application, we would send the data to the server
-    console.log("Form submitted:", formData);
+  const handleSubmit = async () => {
+    if (isSubmitting) return;
     
-    // Add email to the registered list to prevent duplicate registrations
-    if (formData.email) {
-      registeredEmails.add(formData.email.toLowerCase());
+    setIsSubmitting(true);
+    
+    try {
+      // Format the data for submission
+      const submissionData = {
+        full_name: formData.fullName,
+        email: formData.email.toLowerCase(),
+        date_of_birth: formData.dateOfBirth,
+        gender: formData.gender,
+        organization: formData.organization,
+        region: formData.region,
+        constituency: formData.constituency,
+        identification_type: formData.identificationType,
+        identification_number: formData.identificationNumber,
+        agree_to_terms: formData.agreeToTerms
+      };
+      
+      // Insert data into Supabase
+      const { error } = await supabase
+        .from('voters')
+        .insert([submissionData]);
+      
+      if (error) {
+        console.error("Error submitting form:", error);
+        toast({
+          title: "Submission Error",
+          description: "There was an error submitting your registration. Please try again.",
+          variant: "destructive",
+        });
+        setIsSubmitting(false);
+        return;
+      }
+      
+      // Add email to local cache to prevent duplicate registrations in the same session
+      if (formData.email) {
+        registeredEmails.add(formData.email.toLowerCase());
+      }
+      
+      // Show success message
+      toast({
+        title: "Registration Complete",
+        description: "Your voter registration has been submitted successfully!",
+      });
+      
+      // Move to completion step
+      setCurrentStep('complete');
+    } catch (err) {
+      console.error("Error submitting form:", err);
+      toast({
+        title: "Submission Error",
+        description: "There was an error submitting your registration. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
     }
-    
-    // Show success message
-    toast({
-      title: "Registration Complete",
-      description: "Your voter registration has been submitted successfully!",
-    });
-    
-    // Move to completion step
-    setCurrentStep('complete');
   };
 
   const renderStepContent = () => {
@@ -261,9 +308,12 @@ const MultiStepForm = () => {
           <button
             type="button"
             onClick={handleNext}
-            className="px-6 py-2 bg-primary text-white rounded hover:bg-primary/90 transition"
+            disabled={isSubmitting}
+            className={`px-6 py-2 bg-primary text-white rounded hover:bg-primary/90 transition ${
+              isSubmitting ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
           >
-            {currentStep === 'identification' ? 'Submit' : 'Next'}
+            {currentStep === 'identification' ? (isSubmitting ? 'Submitting...' : 'Submit') : 'Next'}
           </button>
         </div>
       )}

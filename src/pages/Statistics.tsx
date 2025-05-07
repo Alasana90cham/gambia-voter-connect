@@ -3,7 +3,7 @@ import { Card } from '@/components/ui/card';
 import { PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { adminUsers, addAdminUser } from '@/data/constituencies';
+import { fetchAdmins, addAdminUser, removeAdminUser, verifyAdminLogin, fetchVoterData } from '@/data/constituencies';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
 import { Download, UserPlus, Filter, Search, Trash2, Printer } from 'lucide-react';
@@ -11,8 +11,9 @@ import { Label } from '@/components/ui/label';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { VoterFormData } from "@/types/form";
+import { UserRole, VoterFormData } from "@/types/form";
 import { format } from "date-fns";
+import { supabase } from "@/integrations/supabase/client";
 import {
   Command,
   CommandEmpty,
@@ -25,149 +26,6 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
-
-// Mock data - this would come from your database in a real app
-const genderData = [
-  { name: 'Male', value: 235 },
-  { name: 'Female', value: 267 }
-];
-
-const regionData = [
-  { name: 'Banjul', value: 67 },
-  { name: 'Kanifing', value: 143 },
-  { name: 'West Coast', value: 129 },
-  { name: 'North Bank', value: 58 },
-  { name: 'Lower River', value: 39 },
-  { name: 'Central River', value: 41 },
-  { name: 'Upper River', value: 25 }
-];
-
-const constituencyData = {
-  'Banjul': [
-    { name: 'Banjul South', value: 22 },
-    { name: 'Banjul Central', value: 24 },
-    { name: 'Banjul North', value: 21 }
-  ],
-  'Kanifing': [
-    { name: 'Bakau', value: 15 },
-    { name: 'Jeshwang', value: 25 },
-    { name: 'Serekunda West', value: 22 },
-    { name: 'Serrekunda', value: 14 },
-    { name: 'Bundungka Kunda', value: 18 },
-    { name: 'Latrikunda Sabijie', value: 16 },
-    { name: 'Talinding Kunjang', value: 15 }
-  ]
-};
-
-// Regional mock data for all regions
-Object.keys(regionData).forEach(region => {
-  if (!constituencyData[region]) {
-    // Add empty placeholder if not already defined
-    constituencyData[region] = [];
-  }
-});
-
-const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042', '#8884d8', '#82ca9d', '#ffc658'];
-
-// Sample voter registration data for the table
-const mockVoterData: Array<VoterFormData> = [
-  {
-    fullName: 'John Doe',
-    email: 'john@example.com',
-    dateOfBirth: new Date('1990-05-15'),
-    gender: 'male',
-    organization: 'Youth Organization A',
-    region: 'Banjul',
-    constituency: 'Banjul South',
-    identificationType: 'passport_number',
-    identificationNumber: '12345678',
-    agreeToTerms: true
-  },
-  {
-    fullName: 'Mary Smith',
-    email: 'mary@example.com',
-    dateOfBirth: new Date('1995-10-08'),
-    gender: 'female',
-    organization: 'Community Development',
-    region: 'Kanifing',
-    constituency: 'Bakau',
-    identificationType: 'identification_document',
-    identificationNumber: '87654321',
-    agreeToTerms: true
-  },
-  {
-    fullName: 'Ibrahim Jallow',
-    email: 'ibrahim@example.com',
-    dateOfBirth: new Date('1988-03-22'),
-    gender: 'male',
-    organization: 'Rural Youth Network',
-    region: 'West Coast',
-    constituency: 'Kombo East',
-    identificationType: 'birth_certificate',
-    identificationNumber: '23456789',
-    agreeToTerms: true
-  },
-  {
-    fullName: 'Fatou Ceesay',
-    email: 'fatou@example.com',
-    dateOfBirth: new Date('1992-12-01'),
-    gender: 'female',
-    organization: 'Women Empowerment Group',
-    region: 'North Bank',
-    constituency: 'Lower Nuimi',
-    identificationType: 'identification_document',
-    identificationNumber: '34567890',
-    agreeToTerms: true
-  },
-  {
-    fullName: 'Modou Lamin',
-    email: 'modou@example.com',
-    dateOfBirth: new Date('1985-07-30'),
-    gender: 'male',
-    organization: 'Farmers Association',
-    region: 'Central River',
-    constituency: 'Janjanbureh',
-    identificationType: 'birth_certificate',
-    identificationNumber: '45678901',
-    agreeToTerms: true
-  },
-  {
-    fullName: 'Isatou Jobe',
-    email: 'isatou@example.com',
-    dateOfBirth: new Date('1993-09-17'),
-    gender: 'female',
-    organization: 'Student Union',
-    region: 'Banjul',
-    constituency: 'Banjul North',
-    identificationType: 'passport_number',
-    identificationNumber: '56789012',
-    agreeToTerms: true
-  },
-  {
-    fullName: 'Ousman Bah',
-    email: 'ousman@example.com',
-    dateOfBirth: new Date('1991-02-14'),
-    gender: 'male',
-    organization: 'Environmental Club',
-    region: 'Upper River',
-    constituency: 'Basse',
-    identificationType: 'identification_document',
-    identificationNumber: '67890123',
-    agreeToTerms: true
-  },
-  {
-    fullName: 'Aminata Touray',
-    email: 'aminata@example.com',
-    dateOfBirth: new Date('1994-11-05'),
-    gender: 'female',
-    organization: 'Health Workers Network',
-    region: 'Lower River',
-    constituency: 'Kiang West',
-    identificationType: 'passport_number',
-    identificationNumber: '78901234',
-    agreeToTerms: true
-  }
-];
 
 const Statistics = () => {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -197,21 +55,147 @@ const Statistics = () => {
     identificationNumber: ''
   });
   
-  // Add missing state for constituency search dropdown
+  // Add state for constituency search dropdown
   const [constituencySearchOpen, setConstituencySearchOpen] = useState(false);
   
-  const [filteredData, setFilteredData] = useState(mockVoterData);
+  // Voter data state
+  const [voterData, setVoterData] = useState<any[]>([]);
+  const [filteredData, setFilteredData] = useState<any[]>([]);
   
   // Admin users state
-  const [adminList, setAdminList] = useState(adminUsers);
+  const [adminList, setAdminList] = useState<UserRole[]>([]);
+  
+  // Chart data state
+  const [genderData, setGenderData] = useState<{ name: string; value: number }[]>([]);
+  const [regionData, setRegionData] = useState<{ name: string; value: number }[]>([]);
+  const [constituencyData, setConstituencyData] = useState<{[key: string]: { name: string; value: number }[]}>({}); 
+  
+  // Loading states
+  const [isLoading, setIsLoading] = useState(false);
+  
+  // Fetch voter data and prepare chart data
+  const loadVoterData = async () => {
+    setIsLoading(true);
+    
+    try {
+      const voters = await fetchVoterData();
+      setVoterData(voters);
+      setFilteredData(voters);
+      
+      if (voters && voters.length > 0) {
+        // Process gender data
+        const genderCounts: Record<string, number> = {};
+        voters.forEach((voter: any) => {
+          const gender = voter.gender || 'Unknown';
+          genderCounts[gender] = (genderCounts[gender] || 0) + 1;
+        });
+        
+        const genderChartData = Object.keys(genderCounts).map(gender => ({
+          name: gender.charAt(0).toUpperCase() + gender.slice(1), // Capitalize
+          value: genderCounts[gender]
+        }));
+        setGenderData(genderChartData);
+        
+        // Process region data
+        const regionCounts: Record<string, number> = {};
+        voters.forEach((voter: any) => {
+          const region = voter.region || 'Unknown';
+          regionCounts[region] = (regionCounts[region] || 0) + 1;
+        });
+        
+        const regionChartData = Object.keys(regionCounts).map(region => ({
+          name: region,
+          value: regionCounts[region]
+        }));
+        setRegionData(regionChartData);
+        
+        // Process constituency data
+        const constituenciesByRegion: Record<string, Record<string, number>> = {};
+        voters.forEach((voter: any) => {
+          const region = voter.region || 'Unknown';
+          const constituency = voter.constituency || 'Unknown';
+          
+          if (!constituenciesByRegion[region]) {
+            constituenciesByRegion[region] = {};
+          }
+          
+          constituenciesByRegion[region][constituency] = (constituenciesByRegion[region][constituency] || 0) + 1;
+        });
+        
+        const constituencyChartData: {[key: string]: { name: string; value: number }[]} = {};
+        Object.keys(constituenciesByRegion).forEach(region => {
+          constituencyChartData[region] = Object.keys(constituenciesByRegion[region]).map(constituency => ({
+            name: constituency,
+            value: constituenciesByRegion[region][constituency]
+          }));
+        });
+        setConstituencyData(constituencyChartData);
+      }
+    } catch (error) {
+      console.error("Error loading voter data:", error);
+      toast({
+        title: "Data Loading Error",
+        description: "Failed to load voter registration data",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+  
+  // Load admins
+  const loadAdmins = async () => {
+    try {
+      const admins = await fetchAdmins();
+      setAdminList(admins);
+    } catch (error) {
+      console.error("Error loading admins:", error);
+    }
+  };
+  
+  // Subscribe to realtime updates for admins
+  const subscribeToAdmins = () => {
+    const adminChannel = supabase
+      .channel('admin-changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'admins' 
+      }, () => {
+        // Reload admins when any change happens
+        loadAdmins();
+      })
+      .subscribe();
+      
+    return () => {
+      supabase.removeChannel(adminChannel);
+    };
+  };
+  
+  // Initial data loading
+  useEffect(() => {
+    if (isAdmin) {
+      loadVoterData();
+      loadAdmins();
+      
+      // Subscribe to realtime updates
+      const unsubscribe = subscribeToAdmins();
+      
+      return () => {
+        unsubscribe();
+      };
+    }
+  }, [isAdmin]);
   
   // Apply filters to the data
   useEffect(() => {
-    let result = mockVoterData;
+    if (!voterData.length) return;
+    
+    let result = voterData;
     
     if (filters.fullName) {
       result = result.filter(voter => 
-        voter.fullName.toLowerCase().includes(filters.fullName.toLowerCase())
+        voter.full_name.toLowerCase().includes(filters.fullName.toLowerCase())
       );
     }
     
@@ -223,7 +207,7 @@ const Statistics = () => {
     
     if (filters.dateOfBirth) {
       result = result.filter(voter => 
-        voter.dateOfBirth && format(voter.dateOfBirth, 'yyyy-MM-dd').includes(filters.dateOfBirth)
+        voter.date_of_birth && voter.date_of_birth.includes(filters.dateOfBirth)
       );
     }
     
@@ -247,18 +231,18 @@ const Statistics = () => {
     
     if (filters.identificationType) {
       result = result.filter(voter => 
-        voter.identificationType && voter.identificationType.includes(filters.identificationType)
+        voter.identification_type && voter.identification_type.includes(filters.identificationType)
       );
     }
     
     if (filters.identificationNumber) {
       result = result.filter(voter => 
-        voter.identificationNumber.includes(filters.identificationNumber)
+        voter.identification_number.includes(filters.identificationNumber)
       );
     }
     
     setFilteredData(result);
-  }, [filters]);
+  }, [filters, voterData]);
   
   // Handle filter changes
   const handleFilterChange = (field: string, value: string) => {
@@ -283,19 +267,29 @@ const Statistics = () => {
   };
   
   // Check for admin login
-  const handleLogin = () => {
-    const admin = adminList.find(user => user.email === email);
+  const handleLogin = async () => {
+    if (!email || !password) {
+      setLoginError('Please enter both email and password');
+      return;
+    }
     
-    if (admin && admin.password === password) {
-      setIsAdmin(true);
-      setLoginError('');
-    } else {
-      setLoginError('Invalid email or password');
+    try {
+      const isValid = await verifyAdminLogin(email, password);
+      
+      if (isValid) {
+        setIsAdmin(true);
+        setLoginError('');
+      } else {
+        setLoginError('Invalid email or password');
+      }
+    } catch (error) {
+      console.error("Login error:", error);
+      setLoginError('An error occurred during login');
     }
   };
   
   // Handle adding a new admin
-  const handleAddAdmin = () => {
+  const handleAddAdmin = async () => {
     if (!newAdminEmail || !newAdminPassword || !newAdminId) {
       toast({
         title: "Missing Information",
@@ -305,35 +299,39 @@ const Statistics = () => {
       return;
     }
     
-    // Check if admin with this email already exists
-    if (adminList.some(admin => admin.email === newAdminEmail)) {
+    try {
+      const newAdmin = await addAdminUser(newAdminId, newAdminEmail, newAdminPassword);
+      
+      if (newAdmin) {
+        toast({
+          title: "Admin Added",
+          description: `New admin ${newAdminEmail} added successfully`,
+        });
+        
+        // Reset form
+        setNewAdminEmail('');
+        setNewAdminPassword('');
+        setNewAdminId('');
+        setOpenDialog(false);
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to add new admin",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error adding admin:", error);
       toast({
-        title: "Duplicate Admin",
-        description: "An admin with this email already exists",
+        title: "Error",
+        description: "Failed to add new admin",
         variant: "destructive",
       });
-      return;
     }
-    
-    // Add new admin - using the function from constituencies.ts to ensure consistency
-    const newAdmin = addAdminUser(newAdminId, newAdminEmail, newAdminPassword);
-    const updatedAdmins = [...adminList, newAdmin];
-    setAdminList(updatedAdmins);
-    
-    toast({
-      title: "Admin Added",
-      description: `New admin ${newAdminEmail} added successfully`,
-    });
-    
-    // Reset form
-    setNewAdminEmail('');
-    setNewAdminPassword('');
-    setNewAdminId('');
-    setOpenDialog(false);
   };
   
   // Handle deleting an admin
-  const handleDeleteAdmin = (id: string) => {
+  const handleDeleteAdmin = async (id: string) => {
     // Don't allow deleting if there's only one admin left
     if (adminList.length <= 1) {
       toast({
@@ -344,38 +342,47 @@ const Statistics = () => {
       return;
     }
     
-    // Filter out the admin from both the state and the actual adminUsers array
-    const updatedAdmins = adminList.filter(admin => admin.id !== id);
-    setAdminList(updatedAdmins);
-    
-    // Update the actual adminUsers array by reference
-    while (adminUsers.length > 0) adminUsers.pop();
-    updatedAdmins.forEach(admin => adminUsers.push(admin));
-    
-    toast({
-      title: "Admin Deleted",
-      description: "Admin has been deleted successfully",
-    });
+    try {
+      const success = await removeAdminUser(id);
+      
+      if (success) {
+        toast({
+          title: "Admin Deleted",
+          description: "Admin has been deleted successfully",
+        });
+      } else {
+        toast({
+          title: "Error",
+          description: "Failed to delete admin",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      console.error("Error deleting admin:", error);
+      toast({
+        title: "Error",
+        description: "Failed to delete admin",
+        variant: "destructive",
+      });
+    }
   };
   
-  // Handle Excel export with current filters applied
   const handleExcelExport = () => {
     // In a real application, this would generate a proper Excel file
     // using a library like xlsx or exceljs with real data from the database
     
     // For demonstration, we'll create a CSV string with the filtered data
-    const headers = "Full Name,Age,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
+    const headers = "Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
     let csvContent = headers;
     
     // Add the filtered data rows
     filteredData.forEach(voter => {
-      const age = voter.dateOfBirth ? Math.floor((new Date().getTime() - voter.dateOfBirth.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : '';
-      const dob = voter.dateOfBirth ? format(voter.dateOfBirth, 'dd/MM/yyyy') : '';
-      const idType = voter.identificationType === 'birth_certificate' ? 'Birth Certificate' : 
-                     voter.identificationType === 'identification_document' ? 'ID Document' :
-                     voter.identificationType === 'passport_number' ? 'Passport' : '';
+      const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+      const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
+                    voter.identification_type === 'identification_document' ? 'ID Document' :
+                    voter.identification_type === 'passport_number' ? 'Passport' : '';
       
-      csvContent += `"${voter.fullName}",${age},"${voter.organization}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identificationNumber}"\n`;
+      csvContent += `"${voter.full_name}","${voter.email}","${voter.organization}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number}"\n`;
     });
     
     // Create a blob and trigger download
@@ -395,7 +402,6 @@ const Statistics = () => {
     });
   };
   
-  // Handle print function
   const handlePrint = () => {
     if (tableRef.current) {
       const printWindow = window.open('', '_blank');
@@ -414,7 +420,7 @@ const Statistics = () => {
         // Table headers
         printWindow.document.write('<tr>');
         printWindow.document.write('<th>Full Name</th>');
-        printWindow.document.write('<th>Age</th>');
+        printWindow.document.write('<th>Email</th>');
         printWindow.document.write('<th>Organization</th>');
         printWindow.document.write('<th>Date of Birth</th>');
         printWindow.document.write('<th>Gender</th>');
@@ -426,22 +432,21 @@ const Statistics = () => {
         
         // Table data
         filteredData.forEach(voter => {
-          const age = voter.dateOfBirth ? Math.floor((new Date().getTime() - voter.dateOfBirth.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : '';
-          const dob = voter.dateOfBirth ? format(voter.dateOfBirth, 'dd/MM/yyyy') : '';
-          const idType = voter.identificationType === 'birth_certificate' ? 'Birth Certificate' : 
-                         voter.identificationType === 'identification_document' ? 'ID Document' :
-                         voter.identificationType === 'passport_number' ? 'Passport' : '';
+          const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+          const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
+                        voter.identification_type === 'identification_document' ? 'ID Document' :
+                        voter.identification_type === 'passport_number' ? 'Passport' : '';
           
           printWindow.document.write('<tr>');
-          printWindow.document.write(`<td>${voter.fullName}</td>`);
-          printWindow.document.write(`<td>${age}</td>`);
+          printWindow.document.write(`<td>${voter.full_name}</td>`);
+          printWindow.document.write(`<td>${voter.email}</td>`);
           printWindow.document.write(`<td>${voter.organization}</td>`);
           printWindow.document.write(`<td>${dob}</td>`);
           printWindow.document.write(`<td>${voter.gender || ''}</td>`);
           printWindow.document.write(`<td>${voter.region || ''}</td>`);
           printWindow.document.write(`<td>${voter.constituency || ''}</td>`);
           printWindow.document.write(`<td>${idType}</td>`);
-          printWindow.document.write(`<td>${voter.identificationNumber}</td>`);
+          printWindow.document.write(`<td>${voter.identification_number}</td>`);
           printWindow.document.write('</tr>');
         });
         
@@ -539,444 +544,345 @@ const Statistics = () => {
           </p>
         </div>
         
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
-          {/* Gender Distribution */}
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold mb-6">Gender Distribution</h2>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={genderData}
-                    cx="50%"
-                    cy="50%"
-                    labelLine={false}
-                    outerRadius={80}
-                    fill="#8884d8"
-                    dataKey="value"
-                    label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
-                  >
-                    {genderData.map((entry, index) => (
-                      <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
-                    ))}
-                  </Pie>
-                  <Tooltip />
-                  <Legend />
-                </PieChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-4 text-sm text-gray-600">
-              <p>Total Registrations: {genderData.reduce((acc, curr) => acc + curr.value, 0)}</p>
-            </div>
-          </Card>
-          
-          {/* Regional Distribution */}
-          <Card className="p-6">
-            <h2 className="text-xl font-semibold mb-6">Regional Distribution</h2>
-            <div className="h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart
-                  data={regionData}
-                  margin={{
-                    top: 5,
-                    right: 30,
-                    left: 20,
-                    bottom: 5,
-                  }}
-                >
-                  <XAxis dataKey="name" />
-                  <YAxis />
-                  <Tooltip />
-                  <Legend />
-                  <Bar dataKey="value" name="Registrations" fill="#0067A5" />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-            <div className="mt-4 text-sm text-gray-600">
-              <p>Total Regions: {regionData.length}</p>
-            </div>
-          </Card>
-        </div>
-        
-        {/* Registration Data Table with Enhanced Filtering */}
-        <Card className="p-6 mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <h2 className="text-xl font-semibold">Registration Data</h2>
-            <div className="flex items-center gap-2">
-              <Button variant="outline" onClick={clearFilters} className="flex items-center gap-2">
-                <Filter size={16} />
-                Clear Filters
-              </Button>
-              <Button variant="outline" onClick={handleExcelExport} className="flex items-center gap-2">
-                <Download size={16} />
-                Export CSV
-              </Button>
-              <Button variant="outline" onClick={handlePrint} className="flex items-center gap-2">
-                <Printer size={16} />
-                Print
-              </Button>
-            </div>
+        {isLoading ? (
+          <div className="flex justify-center items-center h-64">
+            <div className="text-lg">Loading data...</div>
           </div>
-          
-          <div className="overflow-x-auto" ref={tableRef}>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>
-                    <div className="space-y-1">
-                      <div>Full Name</div>
-                      <Input 
-                        placeholder="Filter name..." 
-                        className="h-8 w-full" 
-                        value={filters.fullName}
-                        onChange={(e) => handleFilterChange('fullName', e.target.value)}
-                      />
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-1">
-                      <div>Age</div>
-                      <Input 
-                        placeholder="Filter age..." 
-                        className="h-8 w-full" 
-                        type="number"
-                        min="0"
-                        value={filters.dateOfBirth}
-                        onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
-                      />
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-1">
-                      <div>Organization</div>
-                      <Input 
-                        placeholder="Filter organization..." 
-                        className="h-8 w-full" 
-                        value={filters.organization}
-                        onChange={(e) => handleFilterChange('organization', e.target.value)}
-                      />
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-1">
-                      <div>Date of Birth</div>
-                      <Input 
-                        placeholder="YYYY-MM-DD" 
-                        className="h-8 w-full"
-                        pattern="\d{4}-\d{2}-\d{2}"
-                        value={filters.dateOfBirth}
-                        onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
-                      />
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-1">
-                      <div>Gender</div>
-                      <select 
-                        className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
-                        value={filters.gender}
-                        onChange={(e) => handleFilterChange('gender', e.target.value)}
-                      >
-                        <option value="">All</option>
-                        <option value="male">Male</option>
-                        <option value="female">Female</option>
-                      </select>
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-1">
-                      <div>Region</div>
-                      <select 
-                        className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
-                        value={filters.region}
-                        onChange={(e) => handleFilterChange('region', e.target.value)}
-                      >
-                        <option value="">All Regions</option>
-                        {regionData.map((region) => (
-                          <option key={region.name} value={region.name}>
-                            {region.name}
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-1">
-                      <div>Constituency</div>
-                      <Popover open={constituencySearchOpen} onOpenChange={setConstituencySearchOpen}>
-                        <PopoverTrigger asChild>
-                          <Button 
-                            variant="outline" 
-                            role="combobox" 
-                            aria-expanded={constituencySearchOpen}
-                            className="h-8 w-full justify-between"
-                          >
-                            {filters.constituency || "All constituencies"}
-                            <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                          </Button>
-                        </PopoverTrigger>
-                        <PopoverContent className="w-[200px] p-0">
-                          <Command>
-                            <CommandInput placeholder="Search constituency..." className="h-9" />
-                            <CommandEmpty>No constituency found.</CommandEmpty>
-                            <CommandGroup>
-                              <CommandItem
-                                onSelect={() => {
-                                  handleFilterChange('constituency', '');
-                                  setConstituencySearchOpen(false);
-                                }}
-                              >
-                                All Constituencies
-                              </CommandItem>
-                              {filters.region && 
-                                constituencyData[filters.region as keyof typeof constituencyData]?.map(item => (
-                                  <CommandItem
-                                    key={item.name}
-                                    onSelect={() => {
-                                      handleFilterChange('constituency', item.name);
-                                      setConstituencySearchOpen(false);
-                                    }}
-                                  >
-                                    {item.name}
-                                  </CommandItem>
-                                ))
-                              }
-                              {!filters.region &&
-                                Object.values(constituencyData).flat().map(item => (
-                                  <CommandItem
-                                    key={item.name}
-                                    onSelect={() => {
-                                      handleFilterChange('constituency', item.name);
-                                      setConstituencySearchOpen(false);
-                                    }}
-                                  >
-                                    {item.name}
-                                  </CommandItem>
-                                ))
-                              }
-                            </CommandGroup>
-                          </Command>
-                        </PopoverContent>
-                      </Popover>
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-1">
-                      <div>ID Type</div>
-                      <select 
-                        className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
-                        value={filters.identificationType}
-                        onChange={(e) => handleFilterChange('identificationType', e.target.value)}
-                      >
-                        <option value="">All</option>
-                        <option value="birth_certificate">Birth Certificate</option>
-                        <option value="identification_document">ID Document</option>
-                        <option value="passport_number">Passport</option>
-                      </select>
-                    </div>
-                  </TableHead>
-                  <TableHead>
-                    <div className="space-y-1">
-                      <div>ID Number</div>
-                      <Input 
-                        placeholder="Filter ID..." 
-                        className="h-8 w-full"
-                        pattern="[0-9]*" 
-                        inputMode="numeric"
-                        value={filters.identificationNumber}
-                        onChange={(e) => handleFilterChange('identificationNumber', e.target.value)}
-                      />
-                    </div>
-                  </TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {filteredData.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="text-center py-4">
-                      No matching records found
-                    </TableCell>
-                  </TableRow>
+        ) : (
+          <>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+              {/* Gender Distribution */}
+              <Card className="p-6">
+                <h2 className="text-xl font-semibold mb-6">Gender Distribution</h2>
+                {genderData.length > 0 ? (
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie
+                          data={genderData}
+                          cx="50%"
+                          cy="50%"
+                          labelLine={false}
+                          outerRadius={80}
+                          fill="#8884d8"
+                          dataKey="value"
+                          label={({ name, percent }) => `${name}: ${(percent * 100).toFixed(0)}%`}
+                        >
+                          {genderData.map((entry, index) => (
+                            <Cell key={`cell-${index}`} fill={['#0088FE', '#00C49F', '#FFBB28', '#FF8042'][index % 4]} />
+                          ))}
+                        </Pie>
+                        <Tooltip />
+                        <Legend />
+                      </PieChart>
+                    </ResponsiveContainer>
+                  </div>
                 ) : (
-                  filteredData.map((voter, index) => (
-                    <TableRow key={index}>
-                      <TableCell>{voter.fullName}</TableCell>
-                      <TableCell>
-                        {voter.dateOfBirth ? Math.floor((new Date().getTime() - voter.dateOfBirth.getTime()) / (365.25 * 24 * 60 * 60 * 1000)) : ''}
-                      </TableCell>
-                      <TableCell>{voter.organization}</TableCell>
-                      <TableCell>{voter.dateOfBirth ? format(voter.dateOfBirth, 'dd/MM/yyyy') : ''}</TableCell>
-                      <TableCell className="capitalize">{voter.gender || ''}</TableCell>
-                      <TableCell>{voter.region || ''}</TableCell>
-                      <TableCell>{voter.constituency || ''}</TableCell>
-                      <TableCell>
-                        {voter.identificationType === 'birth_certificate' ? 'Birth Certificate' : 
-                         voter.identificationType === 'identification_document' ? 'ID Document' :
-                         voter.identificationType === 'passport_number' ? 'Passport' : ''}
-                      </TableCell>
-                      <TableCell>{voter.identificationNumber}</TableCell>
-                    </TableRow>
-                  ))
+                  <div className="flex justify-center items-center h-[300px]">
+                    <p>No data available</p>
+                  </div>
                 )}
-              </TableBody>
-            </Table>
-          </div>
-          <div className="mt-4 text-sm text-gray-600">
-            <p>Showing {filteredData.length} of {mockVoterData.length} registrations</p>
-          </div>
-        </Card>
-        
-        {/* Constituency Details */}
-        <Card className="p-6 mb-8">
-          <h2 className="text-xl font-semibold mb-6">Constituency Details</h2>
-          
-          <div className="mb-4">
-            <Label htmlFor="region-select" className="block mb-2">Select Region</Label>
-            <select 
-              id="region-select"
-              className="w-full md:w-64 p-2 border rounded-md"
-              value={selectedRegion}
-              onChange={(e) => setSelectedRegion(e.target.value)}
-            >
-              {regionData.map((region) => (
-                <option key={region.name} value={region.name}>
-                  {region.name}
-                </option>
-              ))}
-            </select>
-          </div>
-          
-          <div className="h-[400px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <BarChart
-                data={constituencyData[selectedRegion as keyof typeof constituencyData] || []}
-                margin={{
-                  top: 5,
-                  right: 30,
-                  left: 20,
-                  bottom: 5,
-                }}
-                layout="vertical"
-              >
-                <XAxis type="number" />
-                <YAxis type="category" dataKey="name" width={150} />
-                <Tooltip />
-                <Legend />
-                <Bar dataKey="value" name="Registrations" fill="#82ca9d" />
-              </BarChart>
-            </ResponsiveContainer>
-          </div>
-        </Card>
-        
-        {/* Admin Management Section with Delete Function */}
-        <Card className="p-6 mb-8">
-          <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-            <h2 className="text-xl font-semibold">Admin Management</h2>
+                <div className="mt-4 text-sm text-gray-600">
+                  <p>Total Registrations: {voterData.length}</p>
+                </div>
+              </Card>
+              
+              {/* Regional Distribution */}
+              <Card className="p-6">
+                <h2 className="text-xl font-semibold mb-6">Regional Distribution</h2>
+                {regionData.length > 0 ? (
+                  <div className="h-[300px]">
+                    <ResponsiveContainer width="100%" height="100%">
+                      <BarChart
+                        data={regionData}
+                        margin={{
+                          top: 5,
+                          right: 30,
+                          left: 20,
+                          bottom: 5,
+                        }}
+                      >
+                        <XAxis dataKey="name" />
+                        <YAxis />
+                        <Tooltip />
+                        <Legend />
+                        <Bar dataKey="value" name="Registrations" fill="#0067A5" />
+                      </BarChart>
+                    </ResponsiveContainer>
+                  </div>
+                ) : (
+                  <div className="flex justify-center items-center h-[300px]">
+                    <p>No data available</p>
+                  </div>
+                )}
+                <div className="mt-4 text-sm text-gray-600">
+                  <p>Total Regions: {regionData.length}</p>
+                </div>
+              </Card>
+            </div>
             
-            <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-              <DialogTrigger asChild>
-                <Button className="flex items-center gap-2">
-                  <UserPlus size={18} />
-                  Add New Admin
-                </Button>
-              </DialogTrigger>
-              <DialogContent>
-                <DialogHeader>
-                  <DialogTitle>Add New Admin</DialogTitle>
-                </DialogHeader>
-                <div className="space-y-4 mt-4">
-                  <div>
-                    <Label htmlFor="admin-id">Admin ID</Label>
-                    <Input 
-                      id="admin-id"
-                      value={newAdminId}
-                      onChange={(e) => setNewAdminId(e.target.value)}
-                      placeholder="Enter unique admin ID"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="admin-email">Email</Label>
-                    <Input 
-                      id="admin-email"
-                      type="email"
-                      value={newAdminEmail}
-                      onChange={(e) => setNewAdminEmail(e.target.value)}
-                      placeholder="Enter admin email"
-                    />
-                  </div>
-                  <div>
-                    <Label htmlFor="admin-password">Password</Label>
-                    <Input 
-                      id="admin-password"
-                      type="password"
-                      value={newAdminPassword}
-                      onChange={(e) => setNewAdminPassword(e.target.value)}
-                      placeholder="Enter admin password"
-                    />
-                  </div>
-                  <Button className="w-full" onClick={handleAddAdmin}>
-                    Add Admin
+            {/* Registration Data Table with Enhanced Filtering */}
+            <Card className="p-6 mb-8">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                <h2 className="text-xl font-semibold">Registration Data</h2>
+                <div className="flex items-center gap-2">
+                  <Button variant="outline" onClick={clearFilters} className="flex items-center gap-2">
+                    <Filter size={16} />
+                    Clear Filters
+                  </Button>
+                  <Button variant="outline" onClick={handleExcelExport} className="flex items-center gap-2">
+                    <Download size={16} />
+                    Export CSV
+                  </Button>
+                  <Button variant="outline" onClick={handlePrint} className="flex items-center gap-2">
+                    <Printer size={16} />
+                    Print
                   </Button>
                 </div>
-              </DialogContent>
-            </Dialog>
-          </div>
-          
-          <div className="overflow-x-auto">
-            <table className="min-w-full bg-white">
-              <thead>
-                <tr>
-                  <th className="py-2 px-4 border-b border-gray-200 text-left">ID</th>
-                  <th className="py-2 px-4 border-b border-gray-200 text-left">Email</th>
-                  <th className="py-2 px-4 border-b border-gray-200 text-left">Role</th>
-                  <th className="py-2 px-4 border-b border-gray-200 text-left">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {adminList.map(user => (
-                  <tr key={user.id}>
-                    <td className="py-2 px-4 border-b border-gray-200">{user.id}</td>
-                    <td className="py-2 px-4 border-b border-gray-200">{user.email}</td>
-                    <td className="py-2 px-4 border-b border-gray-200">{user.isAdmin ? 'Admin' : 'User'}</td>
-                    <td className="py-2 px-4 border-b border-gray-200">
-                      <Button 
-                        variant="destructive" 
-                        size="sm"
-                        onClick={() => handleDeleteAdmin(user.id)}
-                        className="flex items-center gap-1"
-                      >
-                        <Trash2 size={16} />
-                        Delete
-                      </Button>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
-        </Card>
-        
-        {/* High Volume Optimization Note */}
-        <div className="mt-10 p-6 bg-blue-50 rounded-lg">
-          <h3 className="text-lg font-semibold mb-2">Optimization for High Traffic (100,000+ Users)</h3>
-          <p className="text-gray-700 mb-3">
-            This application has been optimized to handle high traffic volumes. Implemented optimizations include:
-          </p>
-          <ul className="list-disc ml-6 mt-2 space-y-2">
-            <li>Database indexing on frequently queried fields (email, region, constituency)</li>
-            <li>Server-side pagination for large data sets</li>
-            <li>Caching of commonly accessed data</li>
-            <li>Load balancing across multiple server instances</li>
-            <li>Database connection pooling to handle concurrent requests</li>
-            <li>Minimized bundle size through code splitting and lazy loading</li>
-            <li>Optimized database queries with proper JOIN operations</li>
-          </ul>
-        </div>
-      </main>
-      
-      <Footer />
-    </div>
-  );
-};
-
-export default Statistics;
+              </div>
+              
+              <div className="overflow-x-auto" ref={tableRef}>
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>
+                        <div className="space-y-1">
+                          <div>Full Name</div>
+                          <Input 
+                            placeholder="Filter name..." 
+                            className="h-8 w-full" 
+                            value={filters.fullName}
+                            onChange={(e) => handleFilterChange('fullName', e.target.value)}
+                          />
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="space-y-1">
+                          <div>Organization</div>
+                          <Input 
+                            placeholder="Filter organization..." 
+                            className="h-8 w-full" 
+                            value={filters.organization}
+                            onChange={(e) => handleFilterChange('organization', e.target.value)}
+                          />
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="space-y-1">
+                          <div>Date of Birth</div>
+                          <Input 
+                            placeholder="YYYY-MM-DD" 
+                            className="h-8 w-full"
+                            pattern="\d{4}-\d{2}-\d{2}"
+                            value={filters.dateOfBirth}
+                            onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
+                          />
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="space-y-1">
+                          <div>Gender</div>
+                          <select 
+                            className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                            value={filters.gender}
+                            onChange={(e) => handleFilterChange('gender', e.target.value)}
+                          >
+                            <option value="">All</option>
+                            <option value="male">Male</option>
+                            <option value="female">Female</option>
+                          </select>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="space-y-1">
+                          <div>Region</div>
+                          <select 
+                            className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                            value={filters.region}
+                            onChange={(e) => handleFilterChange('region', e.target.value)}
+                          >
+                            <option value="">All Regions</option>
+                            {regionData.map((region) => (
+                              <option key={region.name} value={region.name}>
+                                {region.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="space-y-1">
+                          <div>Constituency</div>
+                          <Popover open={constituencySearchOpen} onOpenChange={setConstituencySearchOpen}>
+                            <PopoverTrigger asChild>
+                              <Button 
+                                variant="outline" 
+                                role="combobox" 
+                                aria-expanded={constituencySearchOpen}
+                                className="h-8 w-full justify-between"
+                              >
+                                {filters.constituency || "All constituencies"}
+                                <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                              </Button>
+                            </PopoverTrigger>
+                            <PopoverContent className="w-[200px] p-0">
+                              <Command>
+                                <CommandInput placeholder="Search constituency..." className="h-9" />
+                                <CommandEmpty>No constituency found.</CommandEmpty>
+                                <CommandGroup>
+                                  <CommandItem
+                                    onSelect={() => {
+                                      handleFilterChange('constituency', '');
+                                      setConstituencySearchOpen(false);
+                                    }}
+                                  >
+                                    All Constituencies
+                                  </CommandItem>
+                                  {filters.region && 
+                                    constituencyData[filters.region]?.map(item => (
+                                      <CommandItem
+                                        key={item.name}
+                                        onSelect={() => {
+                                          handleFilterChange('constituency', item.name);
+                                          setConstituencySearchOpen(false);
+                                        }}
+                                      >
+                                        {item.name}
+                                      </CommandItem>
+                                    ))
+                                  }
+                                  {!filters.region &&
+                                    Object.values(constituencyData).flat().map(item => (
+                                      <CommandItem
+                                        key={`${item.name}-${Math.random()}`}
+                                        onSelect={() => {
+                                          handleFilterChange('constituency', item.name);
+                                          setConstituencySearchOpen(false);
+                                        }}
+                                      >
+                                        {item.name}
+                                      </CommandItem>
+                                    ))
+                                  }
+                                </CommandGroup>
+                              </Command>
+                            </PopoverContent>
+                          </Popover>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="space-y-1">
+                          <div>ID Type</div>
+                          <select 
+                            className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                            value={filters.identificationType}
+                            onChange={(e) => handleFilterChange('identificationType', e.target.value)}
+                          >
+                            <option value="">All</option>
+                            <option value="birth_certificate">Birth Certificate</option>
+                            <option value="identification_document">ID Document</option>
+                            <option value="passport_number">Passport</option>
+                          </select>
+                        </div>
+                      </TableHead>
+                      <TableHead>
+                        <div className="space-y-1">
+                          <div>ID Number</div>
+                          <Input 
+                            placeholder="Filter ID..." 
+                            className="h-8 w-full"
+                            value={filters.identificationNumber}
+                            onChange={(e) => handleFilterChange('identificationNumber', e.target.value)}
+                          />
+                        </div>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {filteredData.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={8} className="text-center py-4">
+                          No matching records found
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      filteredData.map((voter, index) => (
+                        <TableRow key={voter.id || index}>
+                          <TableCell>{voter.full_name}</TableCell>
+                          <TableCell>{voter.organization}</TableCell>
+                          <TableCell>{voter.date_of_birth ? voter.date_of_birth.split('T')[0] : ''}</TableCell>
+                          <TableCell className="capitalize">{voter.gender || ''}</TableCell>
+                          <TableCell>{voter.region || ''}</TableCell>
+                          <TableCell>{voter.constituency || ''}</TableCell>
+                          <TableCell>
+                            {voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
+                             voter.identification_type === 'identification_document' ? 'ID Document' :
+                             voter.identification_type === 'passport_number' ? 'Passport' : ''}
+                          </TableCell>
+                          <TableCell>{voter.identification_number}</TableCell>
+                        </TableRow>
+                      ))
+                    )}
+                  </TableBody>
+                </Table>
+              </div>
+              <div className="mt-4 text-sm text-gray-600">
+                <p>Showing {filteredData.length} of {voterData.length} registrations</p>
+              </div>
+            </Card>
+            
+            {/* Constituency Details */}
+            <Card className="p-6 mb-8">
+              <h2 className="text-xl font-semibold mb-6">Constituency Details</h2>
+              
+              <div className="mb-4">
+                <Label htmlFor="region-select" className="block mb-2">Select Region</Label>
+                <select 
+                  id="region-select"
+                  className="w-full md:w-64 p-2 border rounded-md"
+                  value={selectedRegion}
+                  onChange={(e) => setSelectedRegion(e.target.value)}
+                >
+                  {regionData.map((region) => (
+                    <option key={region.name} value={region.name}>
+                      {region.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+              
+              {constituencyData[selectedRegion] && constituencyData[selectedRegion].length > 0 ? (
+                <div className="h-[400px]">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart
+                      data={constituencyData[selectedRegion]}
+                      margin={{
+                        top: 5,
+                        right: 30,
+                        left: 20,
+                        bottom: 5,
+                      }}
+                      layout="vertical"
+                    >
+                      <XAxis type="number" />
+                      <YAxis type="category" dataKey="name" width={150} />
+                      <Tooltip />
+                      <Legend />
+                      <Bar dataKey="value" name="Registrations" fill="#82ca9d" />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              ) : (
+                <div className="flex justify-center items-center h-[300px]">
+                  <p>No constituency data available for this region</p>
+                </div>
+              )}
+            </Card>
+            
+            {/* Admin Management Section with Delete Function */}
+            <Card className="p-6 mb-8">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+                <h2 className="text-xl font-semibold">Admin Management</h2>
+                
+                <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+                  <Dialog
