@@ -197,6 +197,9 @@ const Statistics = () => {
     identificationNumber: ''
   });
   
+  // Add missing state for constituency search dropdown
+  const [constituencySearchOpen, setConstituencySearchOpen] = useState(false);
+  
   const [filteredData, setFilteredData] = useState(mockVoterData);
   
   // Admin users state
