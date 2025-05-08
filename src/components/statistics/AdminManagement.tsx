@@ -23,7 +23,6 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
   const [initialAdminSetupDone, setInitialAdminSetupDone] = useState(false);
   
   useEffect(() => {
-    // Check if initial admin setup has been done
     const checkInitialAdminSetup = async () => {
       const { data, error } = await supabase
         .from('admins')
@@ -52,7 +51,6 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
       return false;
     }
     
-    // Check email format
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(newAdminEmail)) {
       toast({
@@ -72,7 +70,6 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
     try {
       setIsSubmitting(true);
       
-      // Check if email or ID already exists
       const { data: existingAdmin, error: checkError } = await supabase
         .from('admins')
         .select('id, email')
@@ -100,8 +97,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
         return;
       }
       
-      // Use a special RPC function to insert admin and bypass RLS
-      const { data, error } = await supabase.rpc('create_admin', {
+      const { error } = await supabase.rpc('create_admin', {
         admin_id: newAdminId,
         admin_email: newAdminEmail,
         admin_password: newAdminPassword
@@ -122,7 +118,6 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
         description: `New admin ${newAdminEmail} added successfully`,
       });
       
-      // Reset form
       setNewAdminEmail('');
       setNewAdminPassword('');
       setNewAdminId('');
@@ -140,7 +135,6 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
   };
   
   const handleDeleteAdmin = async (id: string) => {
-    // Don't allow deleting if there's only one admin left
     if (adminList.length <= 1) {
       toast({
         title: "Cannot Delete Admin",
@@ -151,9 +145,8 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
     }
     
     try {
-      // Use RPC function to delete admin and bypass RLS
       const { error } = await supabase.rpc('delete_admin', { admin_id: id });
-        
+      
       if (error) {
         console.error("Error deleting admin:", error);
         toast({
@@ -181,8 +174,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
   const addInitialAdmins = async () => {
     setIsSubmitting(true);
     try {
-      // Use an RPC function to add initial admins and bypass RLS
-      const { data, error } = await supabase.rpc('add_initial_admins');
+      const { error } = await supabase.rpc('add_initial_admins');
       
       if (error) {
         console.error("Error adding initial admins:", error);

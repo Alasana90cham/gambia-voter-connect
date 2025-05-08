@@ -9,6 +9,17 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
+// Define types for our RPC functions
+declare module '@supabase/supabase-js' {
+  interface SupabaseClient<Database> {
+    rpc<ResponseType = any>(
+      fn: 'admin_login' | 'create_admin' | 'delete_admin' | 'add_initial_admins',
+      params?: object,
+      options?: object
+    ): { data: ResponseType; error: Error | null };
+  }
+}
+
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     persistSession: true,

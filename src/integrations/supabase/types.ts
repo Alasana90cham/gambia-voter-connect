@@ -83,9 +83,21 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      add_initial_admins: {
+        Args: Record<PropertyKey, never>
+        Returns: undefined
+      }
       admin_login: {
         Args: { admin_email: string; admin_password: string }
         Returns: boolean
+      }
+      create_admin: {
+        Args: { admin_id: string; admin_email: string; admin_password: string }
+        Returns: undefined
+      }
+      delete_admin: {
+        Args: { admin_id: string }
+        Returns: undefined
       }
     }
     Enums: {
