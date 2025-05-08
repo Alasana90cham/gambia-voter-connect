@@ -1,207 +1,39 @@
+
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
-import { toast } from "@/components/ui/use-toast";
-import { UserPlus, Trash2, Plus } from 'lucide-react';
 import { UserRole } from '@/types/form';
-import { supabase } from "@/integrations/supabase/client";
+import { checkInitialAdminSetup } from '@/utils/adminOperations';
+import AdminList from './AdminList';
+import AdminDialogForm from './AdminDialogForm';
+import InitialSetupButton from './InitialSetupButton';
 
 interface AdminManagementProps {
   adminList: UserRole[];
 }
 
 const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
-  const [openDialog, setOpenDialog] = useState(false);
-  const [newAdminEmail, setNewAdminEmail] = useState('');
-  const [newAdminPassword, setNewAdminPassword] = useState('');
-  const [newAdminId, setNewAdminId] = useState('');
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const [initialAdminSetupDone, setInitialAdminSetupDone] = useState(false);
   
   useEffect(() => {
-    const checkInitialAdminSetup = async () => {
-      const { data, error } = await supabase
-        .from('admins')
-        .select('id')
-        .eq('email', 'alasanacham04@gmail.com')
-        .maybeSingle();
-        
-      if (error) {
-        console.error("Error checking initial admin setup:", error);
-        return;
-      }
-      
-      setInitialAdminSetupDone(!!data);
+    const checkSetupStatus = async () => {
+      const isSetupDone = await checkInitialAdminSetup();
+      setInitialAdminSetupDone(isSetupDone);
     };
     
-    checkInitialAdminSetup();
+    checkSetupStatus();
   }, []);
   
-  const validateForm = () => {
-    if (!newAdminEmail || !newAdminPassword || !newAdminId) {
-      toast({
-        title: "Missing Information",
-        description: "Please fill all fields to add a new admin",
-        variant: "destructive",
-      });
-      return false;
-    }
-    
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(newAdminEmail)) {
-      toast({
-        title: "Invalid Email",
-        description: "Please enter a valid email address",
-        variant: "destructive",
-      });
-      return false;
-    }
-    
-    return true;
+  const handleAdminAdded = () => {
+    // The parent component (Statistics.tsx) will handle reload via Supabase subscriptions
   };
   
-  const handleAddAdmin = async () => {
-    if (!validateForm()) return;
-    
-    try {
-      setIsSubmitting(true);
-      
-      const { data: existingAdmin, error: checkError } = await supabase
-        .from('admins')
-        .select('id, email')
-        .or(`email.eq.${newAdminEmail},id.eq.${newAdminId}`)
-        .maybeSingle();
-      
-      if (checkError) {
-        console.error("Error checking admin:", checkError);
-        toast({
-          title: "Error",
-          description: "Failed to check if admin already exists",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      if (existingAdmin) {
-        toast({
-          title: "Admin Already Exists",
-          description: existingAdmin.email === newAdminEmail 
-            ? "An admin with this email already exists" 
-            : "An admin with this ID already exists",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      const { error } = await supabase.rpc('create_admin', {
-        admin_id: newAdminId,
-        admin_email: newAdminEmail,
-        admin_password: newAdminPassword
-      });
-      
-      if (error) {
-        console.error("Error adding admin:", error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to add new admin",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      toast({
-        title: "Admin Added",
-        description: `New admin ${newAdminEmail} added successfully`,
-      });
-      
-      setNewAdminEmail('');
-      setNewAdminPassword('');
-      setNewAdminId('');
-      setOpenDialog(false);
-    } catch (error) {
-      console.error("Error adding admin:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add new admin",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleAdminDeleted = () => {
+    // The parent component (Statistics.tsx) will handle reload via Supabase subscriptions
   };
   
-  const handleDeleteAdmin = async (id: string) => {
-    if (adminList.length <= 1) {
-      toast({
-        title: "Cannot Delete Admin",
-        description: "At least one admin must remain in the system",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      const { error } = await supabase.rpc('delete_admin', { admin_id: id });
-      
-      if (error) {
-        console.error("Error deleting admin:", error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to delete admin",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      toast({
-        title: "Admin Deleted",
-        description: "Admin has been deleted successfully",
-      });
-    } catch (error) {
-      console.error("Error deleting admin:", error);
-      toast({
-        title: "Error",
-        description: "Failed to delete admin",
-        variant: "destructive",
-      });
-    }
-  };
-  
-  const addInitialAdmins = async () => {
-    setIsSubmitting(true);
-    try {
-      const { error } = await supabase.rpc('add_initial_admins');
-      
-      if (error) {
-        console.error("Error adding initial admins:", error);
-        toast({
-          title: "Error",
-          description: error.message || "Failed to add initial admin accounts",
-          variant: "destructive",
-        });
-        return;
-      }
-      
-      toast({
-        title: "Admins Added",
-        description: "All requested admin accounts have been added successfully",
-      });
-      
-      setInitialAdminSetupDone(true);
-    } catch (error) {
-      console.error("Error adding initial admins:", error);
-      toast({
-        title: "Error",
-        description: "Failed to add initial admin accounts",
-        variant: "destructive",
-      });
-    } finally {
-      setIsSubmitting(false);
-    }
+  const handleSetupComplete = () => {
+    setInitialAdminSetupDone(true);
+    // The parent component (Statistics.tsx) will handle reload via Supabase subscriptions
   };
 
   return (
@@ -211,109 +43,14 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
         
         <div className="flex gap-2">
           {!initialAdminSetupDone && (
-            <Button 
-              className="flex items-center gap-2" 
-              variant="outline"
-              onClick={addInitialAdmins}
-              disabled={isSubmitting}
-            >
-              <Plus size={16} />
-              Add Required Admins
-            </Button>
+            <InitialSetupButton onSetupComplete={handleSetupComplete} />
           )}
           
-          <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-            <DialogTrigger asChild>
-              <Button className="flex items-center gap-2">
-                <UserPlus size={16} />
-                Add Admin
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Add New Admin User</DialogTitle>
-              </DialogHeader>
-              <div className="space-y-4 py-4">
-                <div>
-                  <Label htmlFor="admin-id">ID</Label>
-                  <Input 
-                    id="admin-id" 
-                    value={newAdminId}
-                    onChange={(e) => setNewAdminId(e.target.value)}
-                    placeholder="Enter unique ID"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="admin-email">Email</Label>
-                  <Input 
-                    id="admin-email" 
-                    type="email" 
-                    value={newAdminEmail}
-                    onChange={(e) => setNewAdminEmail(e.target.value)}
-                    placeholder="Enter admin email"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="admin-password">Password</Label>
-                  <Input 
-                    id="admin-password" 
-                    type="password" 
-                    value={newAdminPassword}
-                    onChange={(e) => setNewAdminPassword(e.target.value)}
-                    placeholder="Enter password"
-                  />
-                </div>
-                <Button 
-                  className="w-full" 
-                  onClick={handleAddAdmin}
-                  disabled={isSubmitting}
-                >
-                  {isSubmitting ? "Adding..." : "Add Admin"}
-                </Button>
-              </div>
-            </DialogContent>
-          </Dialog>
+          <AdminDialogForm onAdminAdded={handleAdminAdded} />
         </div>
       </div>
       
-      <div className="overflow-x-auto">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>ID</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {adminList.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={3} className="text-center py-4">
-                  No admin users found
-                </TableCell>
-              </TableRow>
-            ) : (
-              adminList.map((admin) => (
-                <TableRow key={admin.id}>
-                  <TableCell>{admin.id}</TableCell>
-                  <TableCell>{admin.email}</TableCell>
-                  <TableCell>
-                    <Button 
-                      variant="ghost" 
-                      size="sm" 
-                      className="text-red-500 hover:text-red-700"
-                      onClick={() => handleDeleteAdmin(admin.id)}
-                    >
-                      <Trash2 size={16} />
-                      <span className="ml-2">Delete</span>
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <AdminList adminList={adminList} onAdminDeleted={handleAdminDeleted} />
     </Card>
   );
 };
