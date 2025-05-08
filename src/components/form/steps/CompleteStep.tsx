@@ -101,7 +101,7 @@ IMPORTANT: Please bring this document and your ID on election day.
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row justify-center gap-4">
+      <div className="flex justify-center">
         <Button
           onClick={handleDownloadProfile}
           className="flex items-center gap-2 bg-primary hover:bg-primary/90"
@@ -109,15 +109,6 @@ IMPORTANT: Please bring this document and your ID on election day.
         >
           <Download size={18} />
           Download Your Profile
-        </Button>
-
-        <Button
-          onClick={onReset}
-          variant="outline"
-          className="flex items-center gap-2"
-          aria-label="Register another voter"
-        >
-          Register Another Voter
         </Button>
       </div>
     </div>

@@ -9,7 +9,6 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from 
 import { toast } from "@/components/ui/use-toast";
 import { UserPlus, Trash2 } from 'lucide-react';
 import { UserRole } from '@/types/form';
-import { addAdminUser, removeAdminUser } from '@/data/constituencies';
 import { supabase } from "@/integrations/supabase/client";
 
 interface AdminManagementProps {
@@ -36,7 +35,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
     try {
       setIsSubmitting(true);
       
-      // Direct database insertion to avoid RLS issues
+      // Direct database insertion
       const { data, error } = await supabase
         .from('admins')
         .insert([{
@@ -91,7 +90,7 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
     }
     
     try {
-      // Direct database deletion to avoid RLS issues
+      // Direct database deletion
       const { error } = await supabase
         .from('admins')
         .delete()
