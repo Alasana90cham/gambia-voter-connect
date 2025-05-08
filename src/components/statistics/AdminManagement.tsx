@@ -22,28 +22,73 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
   const [newAdminId, setNewAdminId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
   
-  const handleAddAdmin = async () => {
+  const validateForm = () => {
     if (!newAdminEmail || !newAdminPassword || !newAdminId) {
       toast({
         title: "Missing Information",
         description: "Please fill all fields to add a new admin",
         variant: "destructive",
       });
-      return;
+      return false;
     }
+    
+    // Check email format
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(newAdminEmail)) {
+      toast({
+        title: "Invalid Email",
+        description: "Please enter a valid email address",
+        variant: "destructive",
+      });
+      return false;
+    }
+    
+    return true;
+  };
+  
+  const handleAddAdmin = async () => {
+    if (!validateForm()) return;
     
     try {
       setIsSubmitting(true);
       
+      // Check if email or ID already exists
+      const { data: existingAdmin, error: checkError } = await supabase
+        .from('admins')
+        .select('id, email')
+        .or(`email.eq.${newAdminEmail},id.eq.${newAdminId}`)
+        .maybeSingle();
+      
+      if (checkError) {
+        console.error("Error checking admin:", checkError);
+        toast({
+          title: "Error",
+          description: "Failed to check if admin already exists",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      if (existingAdmin) {
+        toast({
+          title: "Admin Already Exists",
+          description: existingAdmin.email === newAdminEmail 
+            ? "An admin with this email already exists" 
+            : "An admin with this ID already exists",
+          variant: "destructive",
+        });
+        return;
+      }
+      
       // Direct database insertion
       const { data, error } = await supabase
         .from('admins')
-        .insert([{
+        .insert({
           id: newAdminId,
           email: newAdminEmail,
           password: newAdminPassword,
           is_admin: true
-        }])
+        })
         .select();
       
       if (error) {
