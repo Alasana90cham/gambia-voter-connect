@@ -1,7 +1,8 @@
 
-import React from 'react';
+import React, { useState } from 'react';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
+import { Input } from '@/components/ui/input';
 import { BarChart, Bar, XAxis, YAxis, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface ChartData {
@@ -22,31 +23,56 @@ const ConstituencyDetail: React.FC<ConstituencyDetailProps> = ({
   constituencyData,
   onRegionChange
 }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  // Ensure we have valid constituency data for the selected region
+  const regionConstituencies = constituencyData[selectedRegion] || [];
+  
+  // Filter constituencies based on search term with proper path handling
+  const filteredConstituencies = searchTerm 
+    ? regionConstituencies.filter(constituency => 
+        constituency.name.toLowerCase().includes(searchTerm.toLowerCase())
+      )
+    : regionConstituencies;
+
   return (
     <Card className="p-6 mb-8">
       <h2 className="text-xl font-semibold mb-6">Constituency Details</h2>
       
-      <div className="mb-4">
-        <Label htmlFor="region-select" className="block mb-2">Select Region</Label>
-        <select 
-          id="region-select"
-          className="w-full md:w-64 p-2 border rounded-md"
-          value={selectedRegion}
-          onChange={(e) => onRegionChange(e.target.value)}
-        >
-          {regionData.map((region) => (
-            <option key={region.name} value={region.name}>
-              {region.name}
-            </option>
-          ))}
-        </select>
+      <div className="mb-4 space-y-4">
+        <div>
+          <Label htmlFor="region-select" className="block mb-2">Select Region</Label>
+          <select 
+            id="region-select"
+            className="w-full md:w-64 p-2 border rounded-md"
+            value={selectedRegion}
+            onChange={(e) => onRegionChange(e.target.value)}
+          >
+            {regionData.map((region) => (
+              <option key={region.name} value={region.name}>
+                {region.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        
+        <div>
+          <Label htmlFor="constituency-search" className="block mb-2">Search Constituencies</Label>
+          <Input
+            id="constituency-search"
+            placeholder="Search constituencies..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full md:w-64"
+          />
+        </div>
       </div>
       
-      {constituencyData[selectedRegion] && constituencyData[selectedRegion].length > 0 ? (
+      {filteredConstituencies.length > 0 ? (
         <div className="h-[400px]">
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
-              data={constituencyData[selectedRegion]}
+              data={filteredConstituencies}
               margin={{
                 top: 5,
                 right: 30,
@@ -65,7 +91,11 @@ const ConstituencyDetail: React.FC<ConstituencyDetailProps> = ({
         </div>
       ) : (
         <div className="flex justify-center items-center h-[300px]">
-          <p>No constituency data available for this region</p>
+          <p className="text-gray-500">
+            {searchTerm 
+              ? "No constituencies found matching your search" 
+              : "No constituency data available for this region"}
+          </p>
         </div>
       )}
     </Card>
