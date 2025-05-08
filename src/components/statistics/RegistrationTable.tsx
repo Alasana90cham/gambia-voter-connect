@@ -292,46 +292,12 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
               <TableHead>
                 <div className="space-y-1">
                   <div>Constituency</div>
-                  <Popover open={constituencySearchOpen} onOpenChange={setConstituencySearchOpen}>
-                    <PopoverTrigger asChild>
-                      <Button 
-                        variant="outline" 
-                        role="combobox" 
-                        aria-expanded={constituencySearchOpen}
-                        className="h-8 w-full justify-between"
-                      >
-                        {filters.constituency || "All constituencies"}
-                        <Search className="ml-2 h-4 w-4 shrink-0 opacity-50" />
-                      </Button>
-                    </PopoverTrigger>
-                    <PopoverContent className="w-[200px] p-0">
-                      <Command>
-                        <CommandInput placeholder="Search constituency..." className="h-9" />
-                        <CommandEmpty>No constituency found.</CommandEmpty>
-                        <CommandGroup>
-                          <CommandItem
-                            onSelect={() => {
-                              handleFilterChange('constituency', '');
-                              setConstituencySearchOpen(false);
-                            }}
-                          >
-                            All Constituencies
-                          </CommandItem>
-                          {availableConstituencies.map((item) => (
-                            <CommandItem
-                              key={`${item.name}-${Math.random()}`}
-                              onSelect={() => {
-                                handleFilterChange('constituency', item.name);
-                                setConstituencySearchOpen(false);
-                              }}
-                            >
-                              {item.name}
-                            </CommandItem>
-                          ))}
-                        </CommandGroup>
-                      </Command>
-                    </PopoverContent>
-                  </Popover>
+                  <Input 
+                    placeholder="Filter constituency..." 
+                    className="h-8 w-full" 
+                    value={filters.constituency}
+                    onChange={(e) => handleFilterChange('constituency', e.target.value)}
+                  />
                 </div>
               </TableHead>
               <TableHead>
