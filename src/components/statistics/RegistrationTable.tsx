@@ -1,4 +1,3 @@
-
 import React, { useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -87,6 +86,30 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       identificationNumber: ''
     });
   };
+  
+  // Get all available constituencies based on selected region, or all constituencies if no region selected
+  const getFilteredConstituencies = () => {
+    if (filters.region && constituencyData[filters.region]) {
+      return constituencyData[filters.region] || [];
+    }
+    
+    // If no region filter, combine all constituencies from all regions
+    const allConstituencies: ChartData[] = [];
+    Object.values(constituencyData).forEach(constituencies => {
+      if (Array.isArray(constituencies)) {
+        constituencies.forEach(constituency => {
+          // Avoid duplicates
+          if (!allConstituencies.some(item => item.name === constituency.name)) {
+            allConstituencies.push(constituency);
+          }
+        });
+      }
+    });
+    
+    return allConstituencies;
+  };
+  
+  const availableConstituencies = getFilteredConstituencies();
   
   const handleExcelExport = () => {
     // Create a CSV string with the filtered data
@@ -294,32 +317,17 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                           >
                             All Constituencies
                           </CommandItem>
-                          {filters.region && 
-                            constituencyData[filters.region]?.map(item => (
-                              <CommandItem
-                                key={item.name}
-                                onSelect={() => {
-                                  handleFilterChange('constituency', item.name);
-                                  setConstituencySearchOpen(false);
-                                }}
-                              >
-                                {item.name}
-                              </CommandItem>
-                            ))
-                          }
-                          {!filters.region &&
-                            Object.values(constituencyData).flat().map(item => (
-                              <CommandItem
-                                key={`${item.name}-${Math.random()}`}
-                                onSelect={() => {
-                                  handleFilterChange('constituency', item.name);
-                                  setConstituencySearchOpen(false);
-                                }}
-                              >
-                                {item.name}
-                              </CommandItem>
-                            ))
-                          }
+                          {availableConstituencies.map((item) => (
+                            <CommandItem
+                              key={`${item.name}-${Math.random()}`}
+                              onSelect={() => {
+                                handleFilterChange('constituency', item.name);
+                                setConstituencySearchOpen(false);
+                              }}
+                            >
+                              {item.name}
+                            </CommandItem>
+                          ))}
                         </CommandGroup>
                       </Command>
                     </PopoverContent>
