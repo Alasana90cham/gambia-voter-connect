@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -101,16 +100,12 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
         return;
       }
       
-      // Direct database insertion
-      const { data, error } = await supabase
-        .from('admins')
-        .insert({
-          id: newAdminId,
-          email: newAdminEmail,
-          password: newAdminPassword,
-          is_admin: true
-        })
-        .select();
+      // Use a special RPC function to insert admin and bypass RLS
+      const { data, error } = await supabase.rpc('create_admin', {
+        admin_id: newAdminId,
+        admin_email: newAdminEmail,
+        admin_password: newAdminPassword
+      });
       
       if (error) {
         console.error("Error adding admin:", error);
@@ -156,11 +151,8 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
     }
     
     try {
-      // Direct database deletion
-      const { error } = await supabase
-        .from('admins')
-        .delete()
-        .eq('id', id);
+      // Use RPC function to delete admin and bypass RLS
+      const { error } = await supabase.rpc('delete_admin', { admin_id: id });
         
       if (error) {
         console.error("Error deleting admin:", error);
@@ -189,17 +181,8 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
   const addInitialAdmins = async () => {
     setIsSubmitting(true);
     try {
-      const adminsToAdd = [
-        { id: 'admin1', email: 'alasanacham04@gmail.com', password: 'NYP@2025EV', is_admin: true },
-        { id: 'admin2', email: 'youthgambia@gmail.com', password: 'NYP@2025EV2', is_admin: true },
-        { id: 'admin3', email: 'nypgambia@gmail.com', password: 'NYP@2025EV3', is_admin: true },
-        { id: 'admin4', email: 'info@nyp.org', password: 'NYP@2025EV4', is_admin: true }
-      ];
-      
-      // Insert all admins
-      const { data, error } = await supabase
-        .from('admins')
-        .insert(adminsToAdd);
+      // Use an RPC function to add initial admins and bypass RLS
+      const { data, error } = await supabase.rpc('add_initial_admins');
       
       if (error) {
         console.error("Error adding initial admins:", error);
