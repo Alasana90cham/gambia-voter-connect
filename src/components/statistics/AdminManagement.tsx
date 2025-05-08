@@ -7,7 +7,7 @@ import { Label } from '@/components/ui/label';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
 import { toast } from "@/components/ui/use-toast";
-import { UserPlus, Trash2 } from 'lucide-react';
+import { UserPlus, Trash2, Plus } from 'lucide-react';
 import { UserRole } from '@/types/form';
 import { supabase } from "@/integrations/supabase/client";
 
@@ -21,6 +21,27 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
   const [newAdminPassword, setNewAdminPassword] = useState('');
   const [newAdminId, setNewAdminId] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [initialAdminSetupDone, setInitialAdminSetupDone] = useState(false);
+  
+  useEffect(() => {
+    // Check if initial admin setup has been done
+    const checkInitialAdminSetup = async () => {
+      const { data, error } = await supabase
+        .from('admins')
+        .select('id')
+        .eq('email', 'alasanacham04@gmail.com')
+        .maybeSingle();
+        
+      if (error) {
+        console.error("Error checking initial admin setup:", error);
+        return;
+      }
+      
+      setInitialAdminSetupDone(!!data);
+    };
+    
+    checkInitialAdminSetup();
+  }, []);
   
   const validateForm = () => {
     if (!newAdminEmail || !newAdminPassword || !newAdminId) {
@@ -164,63 +185,120 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
       });
     }
   };
+  
+  const addInitialAdmins = async () => {
+    setIsSubmitting(true);
+    try {
+      const adminsToAdd = [
+        { id: 'admin1', email: 'alasanacham04@gmail.com', password: 'NYP@2025EV', is_admin: true },
+        { id: 'admin2', email: 'youthgambia@gmail.com', password: 'NYP@2025EV2', is_admin: true },
+        { id: 'admin3', email: 'nypgambia@gmail.com', password: 'NYP@2025EV3', is_admin: true },
+        { id: 'admin4', email: 'info@nyp.org', password: 'NYP@2025EV4', is_admin: true }
+      ];
+      
+      // Insert all admins
+      const { data, error } = await supabase
+        .from('admins')
+        .insert(adminsToAdd);
+      
+      if (error) {
+        console.error("Error adding initial admins:", error);
+        toast({
+          title: "Error",
+          description: error.message || "Failed to add initial admin accounts",
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      toast({
+        title: "Admins Added",
+        description: "All requested admin accounts have been added successfully",
+      });
+      
+      setInitialAdminSetupDone(true);
+    } catch (error) {
+      console.error("Error adding initial admins:", error);
+      toast({
+        title: "Error",
+        description: "Failed to add initial admin accounts",
+        variant: "destructive",
+      });
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
 
   return (
     <Card className="p-6 mb-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <h2 className="text-xl font-semibold">Admin Management</h2>
         
-        <Dialog open={openDialog} onOpenChange={setOpenDialog}>
-          <DialogTrigger asChild>
-            <Button className="flex items-center gap-2">
-              <UserPlus size={16} />
-              Add Admin
+        <div className="flex gap-2">
+          {!initialAdminSetupDone && (
+            <Button 
+              className="flex items-center gap-2" 
+              variant="outline"
+              onClick={addInitialAdmins}
+              disabled={isSubmitting}
+            >
+              <Plus size={16} />
+              Add Required Admins
             </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Add New Admin User</DialogTitle>
-            </DialogHeader>
-            <div className="space-y-4 py-4">
-              <div>
-                <Label htmlFor="admin-id">ID</Label>
-                <Input 
-                  id="admin-id" 
-                  value={newAdminId}
-                  onChange={(e) => setNewAdminId(e.target.value)}
-                  placeholder="Enter unique ID"
-                />
-              </div>
-              <div>
-                <Label htmlFor="admin-email">Email</Label>
-                <Input 
-                  id="admin-email" 
-                  type="email" 
-                  value={newAdminEmail}
-                  onChange={(e) => setNewAdminEmail(e.target.value)}
-                  placeholder="Enter admin email"
-                />
-              </div>
-              <div>
-                <Label htmlFor="admin-password">Password</Label>
-                <Input 
-                  id="admin-password" 
-                  type="password" 
-                  value={newAdminPassword}
-                  onChange={(e) => setNewAdminPassword(e.target.value)}
-                  placeholder="Enter password"
-                />
-              </div>
-              <Button 
-                className="w-full" 
-                onClick={handleAddAdmin}
-                disabled={isSubmitting}
-              >
-                {isSubmitting ? "Adding..." : "Add Admin"}
+          )}
+          
+          <Dialog open={openDialog} onOpenChange={setOpenDialog}>
+            <DialogTrigger asChild>
+              <Button className="flex items-center gap-2">
+                <UserPlus size={16} />
+                Add Admin
               </Button>
-            </div>
-          </DialogContent>
-        </Dialog>
+            </DialogTrigger>
+            <DialogContent>
+              <DialogHeader>
+                <DialogTitle>Add New Admin User</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-4 py-4">
+                <div>
+                  <Label htmlFor="admin-id">ID</Label>
+                  <Input 
+                    id="admin-id" 
+                    value={newAdminId}
+                    onChange={(e) => setNewAdminId(e.target.value)}
+                    placeholder="Enter unique ID"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="admin-email">Email</Label>
+                  <Input 
+                    id="admin-email" 
+                    type="email" 
+                    value={newAdminEmail}
+                    onChange={(e) => setNewAdminEmail(e.target.value)}
+                    placeholder="Enter admin email"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="admin-password">Password</Label>
+                  <Input 
+                    id="admin-password" 
+                    type="password" 
+                    value={newAdminPassword}
+                    onChange={(e) => setNewAdminPassword(e.target.value)}
+                    placeholder="Enter password"
+                  />
+                </div>
+                <Button 
+                  className="w-full" 
+                  onClick={handleAddAdmin}
+                  disabled={isSubmitting}
+                >
+                  {isSubmitting ? "Adding..." : "Add Admin"}
+                </Button>
+              </div>
+            </DialogContent>
+          </Dialog>
+        </div>
       </div>
       
       <div className="overflow-x-auto">
