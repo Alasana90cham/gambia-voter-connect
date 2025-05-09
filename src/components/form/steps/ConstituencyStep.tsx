@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Label } from '@/components/ui/label';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { GambiaRegion } from '@/types/form';
@@ -17,13 +17,28 @@ const ConstituencyStep: React.FC<ConstituencyStepProps> = ({
   selectedConstituency, 
   updateFormData 
 }) => {
-  const constituencies = regionConstituencies[region] || [];
+  const [constituencies, setConstituencies] = useState<string[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filteredConstituencies, setFilteredConstituencies] = useState<string[]>([]);
   
-  // Filter constituencies based on search term
-  const filteredConstituencies = constituencies.filter(constituency => 
-    constituency.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  // Use effect to retrieve fresh constituency data when region changes
+  useEffect(() => {
+    if (region) {
+      const regionData = regionConstituencies[region] || [];
+      setConstituencies(regionData);
+      setFilteredConstituencies(regionData);
+    }
+  }, [region]);
+
+  // Filter constituencies when search term changes
+  useEffect(() => {
+    if (constituencies.length > 0) {
+      const filtered = constituencies.filter(constituency => 
+        constituency.toLowerCase().includes(searchTerm.toLowerCase())
+      );
+      setFilteredConstituencies(filtered);
+    }
+  }, [searchTerm, constituencies]);
 
   return (
     <div>

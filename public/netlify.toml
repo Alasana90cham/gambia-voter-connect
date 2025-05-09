@@ -1,0 +1,44 @@
+
+# netlify.toml
+[build]
+  command = "npm run build"
+  publish = "dist"
+
+# Production context: all deploys from the Production branch set in your site's
+# deploy settings will inherit these settings.
+[context.production]
+  command = "npm run build"
+  publish = "dist"
+
+# Set cache control headers for faster loading
+[[headers]]
+  for = "/*"
+  [headers.values]
+    Cache-Control = "public, max-age=31536000, immutable"
+
+# Exception for HTML files
+[[headers]]
+  for = "/*.html"
+  [headers.values]
+    Cache-Control = "public, max-age=0, must-revalidate"
+
+# Config for service worker
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
+
+# Add Brotli compression for relevant file types
+[[headers]]
+  for = "*.js"
+  [headers.values]
+    Content-Encoding = "br"
+
+[[headers]]
+  for = "*.css"
+  [headers.values]
+    Content-Encoding = "br"
+
+# Configure for high traffic
+[build.environment]
+  NODE_OPTIONS = "--max-old-space-size=4096"

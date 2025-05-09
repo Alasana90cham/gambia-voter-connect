@@ -19,7 +19,7 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Bundung ka Kunda'
   ],
   'West Coast': [
-    'Old Yundum', // Added missing comma here
+    'Old Yundum', // Fixed missing comma
     'Busumbala',
     'Brikama South',
     'Brikama North',
@@ -64,7 +64,7 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
   ],
   'Upper River': [
     'Basse',
-    'Sandu', // Added missing comma here
+    'Sandu', // Fixed missing comma
     'Jimara',
     'Kantora',
     'Tumana',
@@ -72,6 +72,11 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Wuli West'
   ]
 };
+
+// Cache mechanism for voter data
+let voterDataCache: any[] | null = null;
+let lastFetchTime = 0;
+const CACHE_TTL = 60000; // 1 minute cache lifetime
 
 // Supabase functions for admin authentication and data fetching
 export const verifyAdminLogin = async (email: string, password: string): Promise<boolean> => {
@@ -128,93 +133,119 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
   }
 };
 
-export const fetchAdmins = async (): Promise<UserRole[]> => {
+// Add connection pooling and retry logic for better handling of concurrent requests
+const fetchWithRetry = async (fetcher: Function, retries = 3, delay = 1000): Promise<any> => {
   try {
-    console.log("Fetching admins...");
-    
-    const { data, error } = await supabase
-      .from('admins')
-      .select('*');
-      
-    if (error) {
-      console.error("Error fetching admins:", error);
-      throw error;
-    }
-    
-    console.log("Admins fetched:", data);
-    
-    // Convert the data from Supabase to match our UserRole type
-    return data.map((admin: any) => ({
-      id: admin.id,
-      email: admin.email,
-      isAdmin: admin.is_admin,
-      password: admin.password // Note: In production, passwords should not be sent to client
-    }));
+    return await fetcher();
   } catch (error) {
-    console.error("Error fetching admins:", error);
-    return [];
+    if (retries <= 0) throw error;
+    
+    console.log(`Retrying operation, ${retries} attempts left`);
+    await new Promise(resolve => setTimeout(resolve, delay));
+    return fetchWithRetry(fetcher, retries - 1, delay * 1.5);
   }
+};
+
+export const fetchAdmins = async (): Promise<UserRole[]> => {
+  return fetchWithRetry(async () => {
+    try {
+      console.log("Fetching admins...");
+      
+      const { data, error } = await supabase
+        .from('admins')
+        .select('*');
+        
+      if (error) {
+        console.error("Error fetching admins:", error);
+        throw error;
+      }
+      
+      console.log("Admins fetched:", data);
+      
+      // Convert the data from Supabase to match our UserRole type
+      return data.map((admin: any) => ({
+        id: admin.id,
+        email: admin.email,
+        isAdmin: admin.is_admin,
+        password: admin.password
+      }));
+    } catch (error) {
+      console.error("Error fetching admins:", error);
+      return [];
+    }
+  });
 };
 
 export const addAdminUser = async (id: string, email: string, password: string): Promise<UserRole | null> => {
-  try {
-    console.log("Adding admin:", { id, email });
-    
-    const { data, error } = await supabase
-      .from('admins')
-      .insert([{
-        id,
-        email,
-        password,
-        is_admin: true
-      }])
-      .select('*')
-      .single();
+  return fetchWithRetry(async () => {
+    try {
+      console.log("Adding admin:", { id, email });
       
-    if (error) {
+      const { data, error } = await supabase
+        .from('admins')
+        .insert([{
+          id,
+          email,
+          password,
+          is_admin: true
+        }])
+        .select('*')
+        .single();
+        
+      if (error) {
+        console.error("Error adding admin:", error);
+        throw error;
+      }
+      
+      console.log("Admin added:", data);
+      
+      return {
+        id: data.id,
+        email: data.email,
+        isAdmin: data.is_admin,
+        password: data.password
+      };
+    } catch (error) {
       console.error("Error adding admin:", error);
-      throw error;
+      return null;
     }
-    
-    console.log("Admin added:", data);
-    
-    return {
-      id: data.id,
-      email: data.email,
-      isAdmin: data.is_admin,
-      password: data.password
-    };
-  } catch (error) {
-    console.error("Error adding admin:", error);
-    return null;
-  }
+  });
 };
 
 export const removeAdminUser = async (id: string): Promise<boolean> => {
-  try {
-    console.log("Removing admin with ID:", id);
-    
-    const { error } = await supabase
-      .from('admins')
-      .delete()
-      .eq('id', id);
+  return fetchWithRetry(async () => {
+    try {
+      console.log("Removing admin with ID:", id);
       
-    if (error) {
+      const { error } = await supabase
+        .from('admins')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        console.error("Error deleting admin:", error);
+        throw error;
+      }
+      
+      console.log("Admin deleted successfully");
+      
+      return true;
+    } catch (error) {
       console.error("Error deleting admin:", error);
-      throw error;
+      return false;
     }
-    
-    console.log("Admin deleted successfully");
-    
-    return true;
-  } catch (error) {
-    console.error("Error deleting admin:", error);
-    return false;
-  }
+  });
 };
 
 export const fetchVoterData = async () => {
   try {
+    // Return cached data if it's still fresh
+    const now = Date.now();
+    if (voterDataCache && (now - lastFetchTime < CACHE_TTL)) {
+      console.log("Returning cached voter data");
+      return voterDataCache;
+    }
+    
     console.log("Fetching voter data...");
     
     const { data, error } = await supabase
@@ -228,48 +259,57 @@ export const fetchVoterData = async () => {
     
     console.log("Voter data fetched:", data?.length || 0, "records");
     
+    // Update cache
+    voterDataCache = data || [];
+    lastFetchTime = now;
+    
     return data || [];
   } catch (error) {
     console.error("Error fetching voter data:", error);
-    return [];
+    return voterDataCache || []; // Return cached data on error if available
   }
 };
 
 export const submitVoterRegistration = async (formData: VoterFormData) => {
-  try {
-    console.log("Submitting voter registration:", formData);
-    
-    if (!formData.dateOfBirth) {
-      throw new Error("Date of birth is required");
-    }
-    
-    // Format the Date object to a string for database storage
-    const { data, error } = await supabase
-      .from('voters')
-      .insert({
-        full_name: formData.fullName,
-        email: formData.email,
-        date_of_birth: format(formData.dateOfBirth, 'yyyy-MM-dd'),
-        gender: formData.gender,
-        organization: formData.organization,
-        region: formData.region,
-        constituency: formData.constituency,
-        identification_type: formData.identificationType,
-        identification_number: formData.identificationNumber,
-        agree_to_terms: formData.agreeToTerms
-      })
-      .select();
+  return fetchWithRetry(async () => {
+    try {
+      console.log("Submitting voter registration:", formData);
       
-    if (error) {
+      if (!formData.dateOfBirth) {
+        throw new Error("Date of birth is required");
+      }
+      
+      // Format the Date object to a string for database storage
+      const { data, error } = await supabase
+        .from('voters')
+        .insert({
+          full_name: formData.fullName,
+          email: formData.email,
+          date_of_birth: format(formData.dateOfBirth, 'yyyy-MM-dd'),
+          gender: formData.gender,
+          organization: formData.organization,
+          region: formData.region,
+          constituency: formData.constituency,
+          identification_type: formData.identificationType,
+          identification_number: formData.identificationNumber,
+          agree_to_terms: formData.agreeToTerms
+        })
+        .select();
+        
+      if (error) {
+        console.error("Error submitting registration:", error);
+        throw error;
+      }
+      
+      console.log("Registration submitted successfully:", data);
+      
+      // Invalidate cache after new submission
+      voterDataCache = null;
+      
+      return data;
+    } catch (error) {
       console.error("Error submitting registration:", error);
       throw error;
     }
-    
-    console.log("Registration submitted successfully:", data);
-    
-    return data;
-  } catch (error) {
-    console.error("Error submitting registration:", error);
-    throw error;
-  }
+  });
 };

@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -24,16 +24,21 @@ const ConstituencyDetail: React.FC<ConstituencyDetailProps> = ({
   onRegionChange
 }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [filteredConstituencies, setFilteredConstituencies] = useState<ChartData[]>([]);
   
   // Ensure we have valid constituency data for the selected region
-  const regionConstituencies = constituencyData[selectedRegion] || [];
-  
-  // Filter constituencies based on search term with proper path handling
-  const filteredConstituencies = searchTerm 
-    ? regionConstituencies.filter(constituency => 
-        constituency.name.toLowerCase().includes(searchTerm.toLowerCase())
-      )
-    : regionConstituencies;
+  useEffect(() => {
+    const regionConstituencies = constituencyData[selectedRegion] || [];
+    
+    // Filter constituencies based on search term
+    const filtered = searchTerm 
+      ? regionConstituencies.filter(constituency => 
+          constituency.name.toLowerCase().includes(searchTerm.toLowerCase())
+        )
+      : regionConstituencies;
+      
+    setFilteredConstituencies(filtered);
+  }, [selectedRegion, constituencyData, searchTerm]);
 
   return (
     <Card className="p-6 mb-8">
