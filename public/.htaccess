@@ -1,0 +1,35 @@
+
+# Enable URL rewriting
+RewriteEngine On
+
+# If the request is not for a real file or directory, redirect to index.html
+RewriteCond %{REQUEST_FILENAME} !-f
+RewriteCond %{REQUEST_FILENAME} !-d
+RewriteRule ^ index.html [QSA,L]
+
+# Set security headers
+<IfModule mod_headers.c>
+  # Prevent clickjacking
+  Header set X-Frame-Options "SAMEORIGIN"
+  # XSS protection
+  Header set X-XSS-Protection "1; mode=block"
+  # Prevent MIME-sniffing
+  Header set X-Content-Type-Options "nosniff"
+  # Referrer policy
+  Header set Referrer-Policy "strict-origin-when-cross-origin"
+</IfModule>
+
+# Set caching for static assets
+<FilesMatch "\.(css|js)$">
+  Header set Cache-Control "public, max-age=31536000, immutable"
+</FilesMatch>
+
+# Exception for HTML files
+<FilesMatch "\.(html)$">
+  Header set Cache-Control "public, max-age=0, must-revalidate"
+</FilesMatch>
+
+# Compression for better performance
+<IfModule mod_deflate.c>
+  AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript
+</IfModule>
