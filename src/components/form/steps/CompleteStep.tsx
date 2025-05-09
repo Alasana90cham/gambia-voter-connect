@@ -88,7 +88,7 @@ IMPORTANT: Please bring this document and your ID on election day.
       <div className="mx-auto mb-6 flex flex-col items-center">
         <h3 className="font-semibold text-lg mb-3 text-gray-800">Your Voter QR Code</h3>
         <p className="text-sm text-gray-600 mb-3">
-          Scan this code at the polling station for quick verification
+          Screenshot this QR code, and present it during election day
         </p>
         <div className="bg-white p-4 rounded-lg shadow-md">
           <QRCodeSVG 
