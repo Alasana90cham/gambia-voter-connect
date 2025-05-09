@@ -18,20 +18,27 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Bundung ka Kunda'
   ],
   'West Coast': [
-    'Brikama North',
-    'Brikama South',
-    'Busumbala',
-    'Kombo Central',
-    'Kombo East',
-    'Busumbala ',
-    'Sanneh Mentereng',
     'Old Yundum'
+    'Busumbala',
+    'Brikama South',
+    'Brikama North',
+    'Kombo East',
+    'Kombo South',
+    'Sanneh Mentereng',
+    'Foni Jarrol',
+    'Foni Bondali',
+    'Foni Kansala',
+    'Foni Berefet',
+    'Foni Bintang Karanai'
   ],
   'North Bank': [
-    'Essau',
-    'Jokadu',
     'Lower Baddibu',
-    'Upper Baddibu'
+    'Lower Nuimi',
+    'Jokadu',
+    'Sabach Sanjal',
+    'Central Badibu',
+    'Upper Badibu',
+    'Upper Nuimi'
   ],
   'Lower River': [
     'Jarra Central',
@@ -48,10 +55,15 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Nianija',
     'Sami',
     'Upper Saloum',
-    'Lower Saloum'
+    'Lower Saloum',
+    'Niamina West',
+    'Niamina East',
+    'Upper Fulladu',
+    'Lower Fulladu',
   ],
   'Upper River': [
     'Basse',
+    'Sandu'
     'Jimara',
     'Kantora',
     'Tumana',
