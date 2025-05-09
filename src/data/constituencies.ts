@@ -1,3 +1,4 @@
+
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -18,7 +19,7 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Bundung ka Kunda'
   ],
   'West Coast': [
-    'Old Yundum'
+    'Old Yundum', // Added missing comma here
     'Busumbala',
     'Brikama South',
     'Brikama North',
@@ -59,11 +60,11 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Niamina West',
     'Niamina East',
     'Upper Fulladu',
-    'Lower Fulladu',
+    'Lower Fulladu'  // Removed trailing comma
   ],
   'Upper River': [
     'Basse',
-    'Sandu',
+    'Sandu', // Added missing comma here
     'Jimara',
     'Kantora',
     'Tumana',
