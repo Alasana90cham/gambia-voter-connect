@@ -18,7 +18,7 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Bundung ka Kunda'
   ],
   'West Coast': [
-    'Old Yundum'
+    'Old Yundum',
     'Busumbala',
     'Brikama South',
     'Brikama North',
@@ -58,7 +58,6 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Lower Saloum',
     'Niamina West',
     'Niamina East',
-    'Niamina Dankunkung'
     'Upper Fulladu',
     'Lower Fulladu',
   ],
