@@ -17,6 +17,10 @@ RewriteRule ^ index.html [QSA,L]
   Header set X-Content-Type-Options "nosniff"
   # Referrer policy
   Header set Referrer-Policy "strict-origin-when-cross-origin"
+  # Content Security Policy
+  Header set Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://fhyhyfoqzpkzkxbkqcdp.supabase.co;"
+  # Permissions Policy
+  Header set Permissions-Policy "camera=(), microphone=(), geolocation=()"
 </IfModule>
 
 # Set caching for static assets
