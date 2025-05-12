@@ -1,14 +1,14 @@
 
-# Deploying to a VPS (Virtual Private Server)
+# Deploying to Hostinger VPS with Nginx
 
-This guide covers the steps for deploying your React application to a VPS such as DigitalOcean, Linode, AWS EC2, etc.
+This guide covers the steps for deploying your React application to a Hostinger VPS using FileZilla and Nginx.
 
 ## Prerequisites
 
-1. A VPS with SSH access
-2. Node.js installed on your VPS
-3. Nginx or Apache installed on your VPS
-4. Domain name (optional but recommended)
+1. A Hostinger VPS with SSH access
+2. FileZilla installed on your local machine
+3. Node.js installed on your VPS
+4. Nginx installed on your VPS
 
 ## Deployment Steps
 
@@ -20,186 +20,170 @@ npm run build
 
 This will create a production-ready build in the `dist` directory.
 
-### 2. Transfer Files to VPS
+### 2. Connect to Your Hostinger VPS using FileZilla
 
-Use SCP or SFTP to transfer the built files to your server:
+1. Open FileZilla
+2. Enter your Hostinger VPS credentials:
+   - Host: Your VPS IP address
+   - Username: Your SSH username
+   - Password: Your SSH password
+   - Port: 22
+3. Click "Quickconnect"
 
-```bash
-# Example using SCP
-scp -r ./dist/* user@your-server-ip:/var/www/your-site-directory/
-```
+### 3. Transfer Files to Your VPS
 
-Alternatively, you can use Git to pull the repository on your server and build it there.
+1. In the left panel (local site), navigate to your project's `dist` directory
+2. In the right panel (remote site), navigate to `/var/www/html` or your preferred web directory
+3. Select all files and folders from your `dist` directory
+4. Right-click and select "Upload"
+5. Wait for the transfer to complete
 
-### 3. Server Configuration
+### 4. Configure Nginx
 
-#### If using Nginx:
+1. Connect to your VPS via SSH:
+   ```bash
+   ssh username@your-vps-ip
+   ```
 
-Create a new site configuration:
+2. Create a new Nginx server block:
+   ```bash
+   sudo nano /etc/nginx/sites-available/gambia-voter-connect
+   ```
 
-```bash
-sudo nano /etc/nginx/sites-available/gambia-voter-connect
-```
+3. Add the following configuration:
+   ```nginx
+   server {
+       listen 80;
+       server_name your-domain.com www.your-domain.com;
 
-Add the following configuration:
+       root /var/www/html;
+       index index.html;
 
-```nginx
-server {
-    listen 80;
-    server_name your-domain.com www.your-domain.com;
+       # Gzip compression
+       gzip on;
+       gzip_types text/plain text/css application/javascript application/json;
+       gzip_min_length 1000;
 
-    root /var/www/your-site-directory;
-    index index.html;
+       # Security headers
+       add_header X-Frame-Options "SAMEORIGIN";
+       add_header X-XSS-Protection "1; mode=block";
+       add_header X-Content-Type-Options "nosniff";
+       add_header Referrer-Policy "strict-origin-when-cross-origin";
+       add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://fhyhyfoqzpkzkxbkqcdp.supabase.co;";
+       add_header Permissions-Policy "camera=(), microphone=(), geolocation=()";
 
-    # Gzip compression
-    gzip on;
-    gzip_types text/plain text/css application/javascript application/json;
-    gzip_min_length 1000;
+       # Cache control for static assets
+       location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
+           expires 30d;
+           add_header Cache-Control "public, max-age=31536000, immutable";
+       }
 
-    # Security headers
-    add_header X-Frame-Options "SAMEORIGIN";
-    add_header X-XSS-Protection "1; mode=block";
-    add_header X-Content-Type-Options "nosniff";
-    add_header Referrer-Policy "strict-origin-when-cross-origin";
-    add_header Content-Security-Policy "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://fhyhyfoqzpkzkxbkqcdp.supabase.co;";
-    add_header Permissions-Policy "camera=(), microphone=(), geolocation=()";
+       # HTML files should not be cached aggressively
+       location ~* \.html$ {
+           add_header Cache-Control "public, max-age=0, must-revalidate";
+       }
 
-    # Cache control for static assets
-    location ~* \.(js|css|png|jpg|jpeg|gif|ico|svg)$ {
-        expires 30d;
-        add_header Cache-Control "public, max-age=31536000, immutable";
-    }
+       # Handle SPA routing - important for React Router
+       location / {
+           try_files $uri $uri/ /index.html;
+       }
+   }
+   ```
 
-    # HTML files should not be cached aggressively
-    location ~* \.html$ {
-        add_header Cache-Control "public, max-age=0, must-revalidate";
-    }
+4. Create a symbolic link to enable the site:
+   ```bash
+   sudo ln -s /etc/nginx/sites-available/gambia-voter-connect /etc/nginx/sites-enabled/
+   ```
 
-    # Handle SPA routing
-    location / {
-        try_files $uri $uri/ /index.html;
-    }
-}
-```
+5. Test the Nginx configuration:
+   ```bash
+   sudo nginx -t
+   ```
 
-Enable the site and restart Nginx:
+6. If the test is successful, restart Nginx:
+   ```bash
+   sudo systemctl restart nginx
+   ```
 
-```bash
-sudo ln -s /etc/nginx/sites-available/gambia-voter-connect /etc/nginx/sites-enabled/
-sudo nginx -t
-sudo systemctl restart nginx
-```
+### 5. SSL Configuration (Recommended)
 
-#### If using Apache:
+1. Install Certbot:
+   ```bash
+   sudo apt update
+   sudo apt install certbot python3-certbot-nginx
+   ```
 
-Create a new site configuration:
+2. Obtain and install SSL certificate:
+   ```bash
+   sudo certbot --nginx -d your-domain.com -d www.your-domain.com
+   ```
 
-```bash
-sudo nano /etc/apache2/sites-available/gambia-voter-connect.conf
-```
+3. Follow the prompts to complete the SSL setup
 
-Add the following configuration:
+### 6. Verify Your Deployment
 
-```apache
-<VirtualHost *:80>
-    ServerName your-domain.com
-    ServerAlias www.your-domain.com
-    DocumentRoot /var/www/your-site-directory
-
-    <Directory /var/www/your-site-directory>
-        Options -Indexes +FollowSymLinks
-        AllowOverride All
-        Require all granted
-    </Directory>
-
-    # Enable compression
-    <IfModule mod_deflate.c>
-        AddOutputFilterByType DEFLATE text/html text/plain text/css application/javascript
-    </IfModule>
-
-    # Enable caching
-    <IfModule mod_expires.c>
-        ExpiresActive On
-        ExpiresByType text/css "access plus 1 year"
-        ExpiresByType application/javascript "access plus 1 year"
-        ExpiresByType image/jpeg "access plus 1 year"
-        ExpiresByType image/png "access plus 1 year"
-        ExpiresByType image/gif "access plus 1 year"
-    </IfModule>
-
-    ErrorLog ${APACHE_LOG_DIR}/gambia-voter-connect-error.log
-    CustomLog ${APACHE_LOG_DIR}/gambia-voter-connect-access.log combined
-</VirtualHost>
-```
-
-Enable the site and restart Apache:
-
-```bash
-sudo a2ensite gambia-voter-connect.conf
-sudo a2enmod rewrite
-sudo systemctl restart apache2
-```
-
-### 4. SSL Configuration (Recommended)
-
-Use Certbot to add SSL with Let's Encrypt:
-
-```bash
-sudo apt update
-sudo apt install certbot python3-certbot-nginx # for Nginx
-# OR
-sudo apt install certbot python3-certbot-apache # for Apache
-
-sudo certbot --nginx -d your-domain.com -d www.your-domain.com # for Nginx
-# OR
-sudo certbot --apache -d your-domain.com -d www.your-domain.com # for Apache
-```
-
-### 5. Verify Deployment
-
-Visit your domain name or server IP to ensure the application is running correctly.
+1. Visit your domain in a web browser
+2. Test navigation through the application to ensure routing works properly
+3. Check the browser console for any errors
 
 ## Maintenance and Updates
 
-1. **Pull updated code from your repository**:
-   ```bash
-   cd /path/to/your/repo
-   git pull origin main
-   ```
+When you need to update your application:
 
-2. **Rebuild the application**:
+1. Build a new version locally:
    ```bash
-   npm install
    npm run build
    ```
 
-3. **Copy the new build to the web directory**:
+2. Use FileZilla to upload the updated files to your VPS, replacing the old files
+
+3. If you've made significant changes to the server configuration, remember to:
    ```bash
-   cp -r dist/* /var/www/your-site-directory/
+   sudo nginx -t
+   sudo systemctl restart nginx
    ```
 
-## Setting Up PM2 for API Services (Optional)
+## Additional Tips for Hostinger VPS
 
-If your application includes API services, you can use PM2 to manage them:
+### Setting up Automatic Renewal for SSL Certificates
+
+Add a cron job to automatically renew your SSL certificates:
 
 ```bash
-# Install PM2
-npm install -g pm2
-
-# Start your API service
-pm2 start server.js --name "gambia-voter-api"
-
-# Set up PM2 to start on system boot
-pm2 startup
-pm2 save
+sudo crontab -e
 ```
 
-## Monitoring
+Add the following line:
 
-Consider setting up monitoring for your VPS:
+```
+0 3 * * * certbot renew --quiet && systemctl reload nginx
+```
 
-1. **Server monitoring**: Tools like Netdata or Prometheus
-2. **Application monitoring**: NewRelic, Sentry, or LogRocket
-3. **Uptime monitoring**: UptimeRobot or StatusCake
+This will attempt renewal at 3 AM daily if certificates are due for renewal.
 
-These will help you detect and resolve issues quickly.
+### Monitoring Your Application
+
+Consider setting up basic monitoring:
+
+1. Install and configure a monitoring tool like Netdata:
+   ```bash
+   bash <(curl -Ss https://my-netdata.io/kickstart.sh)
+   ```
+
+2. Access the monitoring dashboard:
+   ```
+   http://your-vps-ip:19999
+   ```
+
+### Firewall Configuration
+
+For added security, configure your firewall:
+
+```bash
+sudo apt install ufw
+sudo ufw allow 'Nginx Full'
+sudo ufw allow OpenSSH
+sudo ufw enable
+```
+
+This allows only HTTP, HTTPS, and SSH connections to your VPS.
