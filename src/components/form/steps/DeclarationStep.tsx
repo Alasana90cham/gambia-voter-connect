@@ -20,7 +20,7 @@ const DeclarationStep: React.FC<DeclarationStepProps> = ({ agreeToTerms, updateF
         </p>
         
         <p className="text-gray-700 mb-4">
-          The NYPG is committed to protecting your personal information
+          The National Youth Parliament - The Gambia is committed to protecting your personal information
           and will use it solely for the purpose of voter registration and electoral processes.
         </p>
       </div>
