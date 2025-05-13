@@ -1,23 +1,12 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Filter, Download, Printer, Search, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { Table, TableHeader, TableRow, TableHead, TableBody } from "@/components/ui/table";
 import { toast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
-import {
-  Command,
-  CommandEmpty,
-  CommandGroup,
-  CommandInput,
-  CommandItem,
-} from "@/components/ui/command";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
 import {
   Pagination,
@@ -28,6 +17,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/components/ui/pagination";
+import { NoDataRow, VoterRow, formatForExport } from './RegistrationTableHelpers';
 
 interface ChartData {
   name: string;
@@ -65,7 +55,7 @@ interface RegistrationTableProps {
   constituencyData: {[key: string]: ChartData[]};
   onUpdateFilters: (filters: FilterState) => void;
   filters: FilterState;
-  onDeleteSuccess?: () => void; // New prop to trigger parent refresh
+  onDeleteSuccess?: () => void; // Prop to trigger parent refresh
 }
 
 const RegistrationTable: React.FC<RegistrationTableProps> = ({
@@ -78,7 +68,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   onDeleteSuccess
 }) => {
   const tableRef = useRef<HTMLDivElement>(null);
-  const [constituencySearchOpen, setConstituencySearchOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   const [localData, setLocalData] = useState<VoterData[]>(filteredData);
@@ -166,7 +155,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       // Reset selection
       setSelectedRows([]);
       
-      // Notify parent component
+      // Notify parent component to update parent state
       if (onDeleteSuccess) {
         onDeleteSuccess();
       }
@@ -183,7 +172,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }
   };
   
-  // Get all available constituencies based on selected region, or all constituencies if no region selected
+  // Get all available constituencies based on selected region
   const getFilteredConstituencies = () => {
     if (filters.region && constituencyData[filters.region]) {
       return constituencyData[filters.region] || [];
@@ -205,8 +194,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     return allConstituencies;
   };
   
-  const availableConstituencies = getFilteredConstituencies();
-  
   const handleExcelExport = () => {
     // Create a CSV string with the filtered data
     const headers = "Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
@@ -214,12 +201,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     
     // Add the filtered data rows
     filteredData.forEach(voter => {
-      const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
-      const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
-                    voter.identification_type === 'identification_document' ? 'ID Document' :
-                    voter.identification_type === 'passport_number' ? 'Passport' : '';
-      
-      csvContent += `"${voter.full_name}","${voter.email}","${voter.organization}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number}"\n`;
+      csvContent += formatForExport(voter) + "\n";
     });
     
     // Create a blob and trigger download
@@ -296,7 +278,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }
   };
   
-  // Pagination logic with localData instead of filteredData
+  // Pagination logic using localData instead of filteredData for immediate UI updates
   const indexOfLastRecord = currentPage * recordsPerPage;
   const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
   const paginatedData = localData.slice(indexOfFirstRecord, indexOfLastRecord);
@@ -380,7 +362,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
             <Download size={16} />
             Export CSV
           </Button>
-          <Button variant="outline" onClick={handlePrint} className="flex items-center gap-2">
+          <Button variant="outline" onClick={handlePrint} className="flex items-center gap-2" id="printTable">
             <Printer size={16} />
             Print
           </Button>
@@ -504,34 +486,15 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
           </TableHeader>
           <TableBody>
             {paginatedData.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={9} className="text-center py-4">
-                  No matching records found
-                </TableCell>
-              </TableRow>
+              <NoDataRow />
             ) : (
-              paginatedData.map((voter, index) => (
-                <TableRow key={voter.id || index}>
-                  <TableCell>
-                    <Checkbox 
-                      checked={selectedRows.includes(voter.id)}
-                      onCheckedChange={() => toggleRowSelection(voter.id)}
-                      aria-label={`Select ${voter.full_name}`}
-                    />
-                  </TableCell>
-                  <TableCell>{voter.full_name}</TableCell>
-                  <TableCell>{voter.organization}</TableCell>
-                  <TableCell>{voter.date_of_birth ? voter.date_of_birth.split('T')[0] : ''}</TableCell>
-                  <TableCell className="capitalize">{voter.gender || ''}</TableCell>
-                  <TableCell>{voter.region || ''}</TableCell>
-                  <TableCell>{voter.constituency || ''}</TableCell>
-                  <TableCell>
-                    {voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
-                     voter.identification_type === 'identification_document' ? 'ID Document' :
-                     voter.identification_type === 'passport_number' ? 'Passport' : ''}
-                  </TableCell>
-                  <TableCell>{voter.identification_number}</TableCell>
-                </TableRow>
+              paginatedData.map((voter) => (
+                <VoterRow 
+                  key={voter.id} 
+                  voter={voter}
+                  isSelected={selectedRows.includes(voter.id)}
+                  onToggleSelect={toggleRowSelection}
+                />
               ))
             )}
           </TableBody>
