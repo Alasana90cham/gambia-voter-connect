@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
-import { AdminLogin } from '@/components/statistics/AdminLogin';
+import AdminLogin from '@/components/statistics/AdminLogin';
 import { StatisticsProvider } from '@/components/statistics/StatisticsContext';
 import StatisticsContent from '@/components/statistics/StatisticsContent';
 import { toast } from "@/components/ui/use-toast";
