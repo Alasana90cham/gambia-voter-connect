@@ -133,6 +133,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     
     try {
       setIsDeleting(true);
+      console.log("Deleting voter IDs:", selectedRows);
       
       // Delete voters from Supabase
       const { error } = await supabase
@@ -141,6 +142,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         .in('id', selectedRows);
       
       if (error) {
+        console.error("Error from Supabase:", error);
         throw error;
       }
       
