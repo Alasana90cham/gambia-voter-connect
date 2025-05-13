@@ -113,7 +113,9 @@ const Statistics = () => {
       <Header />
       
       <StatisticsProvider>
-        <StatisticsContent onLogout={handleLogout} />
+        <main className="flex-grow">
+          <StatisticsContent onLogout={handleLogout} />
+        </main>
       </StatisticsProvider>
       
       <Footer />
