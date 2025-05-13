@@ -1,5 +1,5 @@
 
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Filter, Download, Printer, Search, Trash2 } from 'lucide-react';
@@ -20,6 +20,15 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { supabase } from "@/integrations/supabase/client";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
 
 interface ChartData {
   name: string;
@@ -72,6 +81,10 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
   
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const recordsPerPage = 100;
+  
   const handleFilterChange = (field: keyof FilterState, value: string) => {
     onUpdateFilters({
       ...filters,
@@ -101,10 +114,10 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   };
   
   const selectAllRows = () => {
-    if (selectedRows.length === filteredData.length) {
+    if (selectedRows.length === paginatedData.length) {
       setSelectedRows([]);
     } else {
-      setSelectedRows(filteredData.map(voter => voter.id));
+      setSelectedRows(paginatedData.map(voter => voter.id));
     }
   };
   
@@ -264,6 +277,56 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       }
     }
   };
+  
+  // Pagination logic
+  const indexOfLastRecord = currentPage * recordsPerPage;
+  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  const paginatedData = filteredData.slice(indexOfFirstRecord, indexOfLastRecord);
+  
+  const totalPages = Math.ceil(filteredData.length / recordsPerPage);
+  
+  // Generate page numbers for pagination
+  const getPageNumbers = () => {
+    const pages = [];
+    const maxDisplayedPages = 5;
+    
+    if (totalPages <= maxDisplayedPages) {
+      // If we have 5 or fewer pages, show all page numbers
+      for (let i = 1; i <= totalPages; i++) {
+        pages.push(i);
+      }
+    } else {
+      // Handle case with more than 5 pages
+      if (currentPage <= 3) {
+        // Near the start
+        for (let i = 1; i <= 4; i++) {
+          pages.push(i);
+        }
+        pages.push('ellipsis');
+        pages.push(totalPages);
+      } else if (currentPage >= totalPages - 2) {
+        // Near the end
+        pages.push(1);
+        pages.push('ellipsis');
+        for (let i = totalPages - 3; i <= totalPages; i++) {
+          pages.push(i);
+        }
+      } else {
+        // Somewhere in the middle
+        pages.push(1);
+        pages.push('ellipsis');
+        pages.push(currentPage - 1);
+        pages.push(currentPage);
+        pages.push(currentPage + 1);
+        pages.push('ellipsis');
+        pages.push(totalPages);
+      }
+    }
+    
+    return pages;
+  };
+  
+  const pageNumbers = getPageNumbers();
 
   return (
     <Card className="p-6 mb-8">
@@ -302,7 +365,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
             <TableRow>
               <TableHead className="w-12">
                 <Checkbox 
-                  checked={selectedRows.length === filteredData.length && filteredData.length > 0} 
+                  checked={paginatedData.length > 0 && selectedRows.length === paginatedData.length} 
                   onCheckedChange={selectAllRows}
                   aria-label="Select all"
                 />
@@ -412,14 +475,14 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {filteredData.length === 0 ? (
+            {paginatedData.length === 0 ? (
               <TableRow>
                 <TableCell colSpan={9} className="text-center py-4">
                   No matching records found
                 </TableCell>
               </TableRow>
             ) : (
-              filteredData.map((voter, index) => (
+              paginatedData.map((voter, index) => (
                 <TableRow key={voter.id || index}>
                   <TableCell>
                     <Checkbox 
@@ -446,8 +509,51 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
           </TableBody>
         </Table>
       </div>
+      
+      {/* Pagination controls */}
+      {totalPages > 1 && (
+        <Pagination className="mt-4">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            
+            {pageNumbers.map((pageNumber, i) => (
+              pageNumber === 'ellipsis' ? (
+                <PaginationItem key={`ellipsis-${i}`}>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={pageNumber}>
+                  <PaginationLink
+                    isActive={currentPage === pageNumber}
+                    onClick={() => setCurrentPage(pageNumber as number)}
+                    className="cursor-pointer"
+                  >
+                    {pageNumber}
+                  </PaginationLink>
+                </PaginationItem>
+              )
+            ))}
+            
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
+      
       <div className="mt-4 text-sm text-gray-600">
-        <p>Showing {filteredData.length} of {voterData.length} registrations</p>
+        <p>
+          Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, filteredData.length)} of {filteredData.length} registrations
+          {filteredData.length !== voterData.length && ` (filtered from ${voterData.length} total)`}
+        </p>
         {selectedRows.length > 0 && (
           <p className="mt-1">{selectedRows.length} record(s) selected</p>
         )}
