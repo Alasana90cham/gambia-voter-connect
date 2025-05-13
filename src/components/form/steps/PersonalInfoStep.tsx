@@ -46,7 +46,7 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
       const { data, error } = await supabase
         .from('voters')
         .select('email')
-        .eq('email', formData.email)
+        .eq('email', formData.email as string)
         .maybeSingle();
       
       if (error) {

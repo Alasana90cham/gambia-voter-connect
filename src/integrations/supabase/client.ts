@@ -47,40 +47,43 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   },
   db: {
     schema: 'public'
-  },
-  // Add request handling to sanitize inputs and catch potential injection attacks
-  fetch: (url, options) => {
-    // Log auth-related activity for security monitoring (but not auth details)
-    if (url.includes('/auth/')) {
-      console.log(`Auth operation requested: ${new URL(url).pathname}`);
-    }
-    return fetch(url, {
-      ...options,
-      credentials: 'same-origin'
-    });
   }
 });
 
 // Add monitoring for suspicious activities
 let failedRequests = 0;
-const originalFetch = supabase.fetch.bind(supabase);
-supabase.fetch = async (url, options) => {
+
+// Use event listeners to monitor request failures
+supabase.auth.onAuthStateChange((event, session) => {
+  if (event === 'SIGNED_OUT') {
+    console.log('User signed out');
+    failedRequests = 0; // Reset counter on sign out
+  } else if (event === 'USER_UPDATED') {
+    console.log('User session updated');
+  }
+});
+
+// Monitor for authentication failures
+const originalAuthRequest = supabase.auth.signInWithPassword;
+supabase.auth.signInWithPassword = async (credentials) => {
   try {
-    const response = await originalFetch(url, options);
-    if (response.status === 401 || response.status === 403) {
+    const response = await originalAuthRequest(credentials);
+    if (response.error) {
       failedRequests++;
       if (failedRequests > 5) {
-        console.error('Multiple unauthorized access attempts detected');
+        console.error('Multiple failed login attempts detected');
         // Reset to avoid triggering multiple times
-        failedRequests = 0;
+        setTimeout(() => {
+          failedRequests = 0;
+        }, 15 * 60 * 1000); // Reset after 15 minutes
       }
-    } else if (response.ok) {
-      // Reset on successful requests
+    } else {
+      // Reset on successful login
       failedRequests = 0;
     }
     return response;
   } catch (error) {
-    console.error('Supabase request error:', error);
+    console.error('Supabase auth error:', error);
     throw error;
   }
 };

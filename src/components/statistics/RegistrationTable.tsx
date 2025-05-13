@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -135,7 +136,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       const { error } = await supabase
         .from('voters')
         .delete()
-        .in('id', selectedRows);
+        .in('id', selectedRows as any);
       
       if (error) {
         console.error("Error from Supabase:", error);

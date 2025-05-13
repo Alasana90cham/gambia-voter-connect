@@ -7,7 +7,7 @@ export const checkInitialAdminSetup = async (): Promise<boolean> => {
   const { data, error } = await supabase
     .from('admins')
     .select('id')
-    .eq('email', 'alasanacham04@gmail.com')
+    .eq('email', 'alasanacham04@gmail.com' as any)
     .maybeSingle();
     
   if (error) {
@@ -59,9 +59,10 @@ export const checkExistingAdmin = async (email: string, id: string) => {
   }
   
   if (existingAdmin) {
+    const emailMatches = existingAdmin.email === email;
     toast({
       title: "Admin Already Exists",
-      description: existingAdmin.email === email 
+      description: emailMatches 
         ? "An admin with this email already exists" 
         : "An admin with this ID already exists",
       variant: "destructive",

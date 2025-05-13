@@ -43,7 +43,7 @@ const AdminList: React.FC<AdminListProps> = ({ adminList, onAdminDeleted }) => {
       const { error } = await supabase
         .from('admins')
         .delete()
-        .eq('id', id);
+        .eq('id', id as any);
         
       if (error) {
         console.error("Direct deletion error:", error);

@@ -1,3 +1,4 @@
+
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -181,8 +182,8 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
         const { data, error } = await supabase
           .from('admins')
           .select('*')
-          .eq('email', email)
-          .eq('password', password)
+          .eq('email', email as any)
+          .eq('password', password as any)
           .single();
         
         if (error) {
@@ -271,7 +272,7 @@ export const addAdminUser = async (id: string, email: string, password: string):
           email,
           password,
           is_admin: true
-        }])
+        }] as any)
         .select('*')
         .single();
         
@@ -285,12 +286,17 @@ export const addAdminUser = async (id: string, email: string, password: string):
       // Invalidate admin cache after modifying data
       adminCache.invalidate();
       
-      return {
-        id: data.id,
-        email: data.email,
-        isAdmin: data.is_admin,
-        password: data.password
-      };
+      // Handle possible type issues by checking properties
+      if (data && typeof data === 'object') {
+        return {
+          id: data.id || id,
+          email: data.email || email,
+          isAdmin: data.is_admin !== undefined ? data.is_admin : true,
+          password: data.password || password
+        };
+      }
+      
+      return null;
     } catch (error) {
       console.error("Error adding admin:", error);
       return null;
@@ -327,7 +333,7 @@ export const removeAdminUser = async (id: string): Promise<boolean> => {
       const { error } = await supabase
         .from('admins')
         .delete()
-        .eq('id', id);
+        .eq('id', id as any);
         
       if (error) {
         console.error("Error directly deleting admin:", error);
@@ -380,21 +386,24 @@ export const submitVoterRegistration = async (formData: VoterFormData) => {
         throw new Error("Date of birth is required");
       }
       
+      // Use type casting to match Supabase expected types
+      const insertData = {
+        full_name: formData.fullName,
+        email: formData.email,
+        date_of_birth: format(formData.dateOfBirth, 'yyyy-MM-dd'),
+        gender: formData.gender,
+        organization: formData.organization,
+        region: formData.region,
+        constituency: formData.constituency,
+        identification_type: formData.identificationType,
+        identification_number: formData.identificationNumber,
+        agree_to_terms: formData.agreeToTerms
+      };
+      
       // Format the Date object to a string for database storage
       const { data, error } = await supabase
         .from('voters')
-        .insert({
-          full_name: formData.fullName,
-          email: formData.email,
-          date_of_birth: format(formData.dateOfBirth, 'yyyy-MM-dd'),
-          gender: formData.gender,
-          organization: formData.organization,
-          region: formData.region,
-          constituency: formData.constituency,
-          identification_type: formData.identificationType,
-          identification_number: formData.identificationNumber,
-          agree_to_terms: formData.agreeToTerms
-        })
+        .insert(insertData as any)
         .select();
         
       if (error) {
