@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Filter, Download, Printer, Search, Trash2 } from 'lucide-react';
+import { Filter, Download, Printer, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { toast } from "@/components/ui/use-toast";
@@ -117,47 +117,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }
   };
   
-  // New function to delete a single voter record
-  const deleteSingleVoter = async (id: string) => {
-    try {
-      console.log("Deleting single voter ID:", id);
-      setIsDeleting(true);
-      
-      const { error } = await supabase
-        .from('voters')
-        .delete()
-        .eq('id', id);
-      
-      if (error) {
-        console.error("Error deleting voter:", error);
-        throw error;
-      }
-      
-      // Update UI immediately
-      setLocalData(prev => prev.filter(voter => voter.id !== id));
-      
-      toast({
-        title: "Record Deleted",
-        description: "Voter record has been successfully deleted.",
-      });
-      
-      // Notify parent component to update global state
-      if (onDeleteSuccess) {
-        onDeleteSuccess();
-      }
-      
-    } catch (error) {
-      console.error("Error deleting voter record:", error);
-      toast({
-        title: "Deletion Failed",
-        description: "There was an error deleting the record. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-  
   const deleteSelectedRows = async () => {
     if (selectedRows.length === 0) {
       toast({
@@ -172,7 +131,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       setIsDeleting(true);
       console.log("Deleting voter IDs:", selectedRows);
       
-      // Delete voters from Supabase with improved error handling
+      // Delete voters from Supabase
       const { error } = await supabase
         .from('voters')
         .delete()
@@ -190,13 +149,12 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       toast({
         title: "Records Deleted",
         description: `${selectedRows.length} record(s) have been deleted successfully.`,
-        variant: "default",
       });
       
       // Reset selection
       setSelectedRows([]);
       
-      // Notify parent component to update parent state
+      // Notify parent component to update global state
       if (onDeleteSuccess) {
         onDeleteSuccess();
       }
@@ -212,7 +170,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       setIsDeleting(false);
     }
   };
-  
   
   const getFilteredConstituencies = () => {
     if (filters.region && constituencyData[filters.region]) {
@@ -432,7 +389,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     };
   }, []);
 
-  // Updated VoterRow component with individual delete button
+  // Updated VoterRow component - without individual delete button
   const VoterRow = ({ voter, isSelected, onToggleSelect }) => {
     const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
     const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
@@ -448,21 +405,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
             aria-label={`Select ${voter.full_name}`}
           />
         </TableCell>
-        <TableCell>
-          <div className="flex items-center justify-between">
-            <span>{voter.full_name}</span>
-            <Button 
-              variant="ghost" 
-              size="sm" 
-              className="text-red-500 hover:text-red-700 h-8 w-8 p-0"
-              onClick={() => deleteSingleVoter(voter.id)}
-              disabled={isDeleting}
-            >
-              <Trash2 size={16} />
-              <span className="sr-only">Delete</span>
-            </Button>
-          </div>
-        </TableCell>
+        <TableCell>{voter.full_name}</TableCell>
         <TableCell>{voter.organization}</TableCell>
         <TableCell>{dob}</TableCell>
         <TableCell>{voter.gender}</TableCell>
@@ -487,7 +430,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
               disabled={isDeleting}
             >
               <Trash2 size={16} />
-              {isDeleting ? 'Deleting...' : `Delete (${selectedRows.length})`}
+              {isDeleting ? 'Deleting...' : `Delete Selected (${selectedRows.length})`}
             </Button>
           )}
           <Button variant="outline" onClick={clearFilters} className="flex items-center gap-2">
