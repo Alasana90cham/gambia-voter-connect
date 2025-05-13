@@ -26,7 +26,6 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
     isLoading,
     selectedRegion,
     setSelectedRegion,
-    handleDeleteSuccess,
     handleExcelExport
   } = useStatistics();
 
@@ -91,7 +90,6 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
             constituencyData={constituencyData}
             onUpdateFilters={setFilters}
             filters={filters}
-            onDeleteSuccess={handleDeleteSuccess}
           />
           
           {/* Constituency Details */}

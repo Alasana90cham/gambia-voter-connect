@@ -2,7 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Filter, Download, Printer, Trash2 } from 'lucide-react';
+import { Filter, Download, Printer } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { toast } from "@/components/ui/use-toast";
@@ -69,7 +69,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
 }) => {
   const tableRef = useRef<HTMLDivElement>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
-  const [isDeleting, setIsDeleting] = useState(false);
   const [localData, setLocalData] = useState<VoterData[]>(filteredData);
   
   // Update local data when filteredData changes
@@ -118,60 +117,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }
   };
   
-  const deleteSelectedRows = async () => {
-    if (selectedRows.length === 0) {
-      toast({
-        title: "No Rows Selected",
-        description: "Please select at least one row to delete.",
-        variant: "destructive",
-      });
-      return;
-    }
-    
-    try {
-      setIsDeleting(true);
-      console.log("Deleting voter IDs:", selectedRows);
-      
-      // Delete voters from Supabase
-      const { error } = await supabase
-        .from('voters')
-        .delete()
-        .in('id', selectedRows);
-      
-      if (error) {
-        console.error("Error from Supabase:", error);
-        throw error;
-      }
-      
-      // Update UI immediately by removing deleted rows from local state
-      const updatedLocalData = localData.filter(voter => !selectedRows.includes(voter.id));
-      setLocalData(updatedLocalData);
-      
-      toast({
-        title: "Records Deleted",
-        description: `${selectedRows.length} record(s) have been deleted successfully.`,
-      });
-      
-      // Reset selection
-      setSelectedRows([]);
-      
-      // Notify parent component to update global state
-      if (onDeleteSuccess) {
-        onDeleteSuccess();
-      }
-      
-    } catch (error) {
-      console.error("Error deleting records:", error);
-      toast({
-        title: "Deletion Failed",
-        description: "There was an error deleting the selected records. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-  
   const getFilteredConstituencies = () => {
     if (filters.region && constituencyData[filters.region]) {
       return constituencyData[filters.region] || [];
@@ -198,9 +143,10 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     const headers = "Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
     let csvContent = headers;
     
-    // Add the filtered data rows
+    // Add the filtered data rows with sensitive info redacted for export
     filteredData.forEach(voter => {
-      csvContent += formatForExport(voter) + "\n";
+      const safeVoter = sanitizeDataForExport(voter);
+      csvContent += formatForExport(safeVoter) + "\n";
     });
     
     // Create a blob and trigger download
@@ -218,6 +164,28 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       title: "Export Successful",
       description: `${filteredData.length} records have been exported to CSV format`,
     });
+  };
+
+  // Function to sanitize sensitive data before exporting
+  const sanitizeDataForExport = (voter: VoterData): VoterData => {
+    // Create a copy to avoid modifying the original data
+    const sanitized = { ...voter };
+    
+    // Mask email addresses
+    if (sanitized.email) {
+      const parts = sanitized.email.split('@');
+      if (parts.length === 2) {
+        sanitized.email = `${parts[0].substring(0, 2)}${'*'.repeat(parts[0].length - 2)}@${parts[1]}`;
+      }
+    }
+    
+    // Mask identification numbers (show only last 4 characters)
+    if (sanitized.identification_number && sanitized.identification_number.length > 4) {
+      sanitized.identification_number = '*'.repeat(sanitized.identification_number.length - 4) + 
+        sanitized.identification_number.slice(-4);
+    }
+    
+    return sanitized;
   };
   
   const handlePrint = () => {
@@ -238,7 +206,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         // Table headers
         printWindow.document.write('<tr>');
         printWindow.document.write('<th>Full Name</th>');
-        printWindow.document.write('<th>Email</th>');
         printWindow.document.write('<th>Organization</th>');
         printWindow.document.write('<th>Date of Birth</th>');
         printWindow.document.write('<th>Gender</th>');
@@ -248,23 +215,24 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         printWindow.document.write('<th>ID Number</th>');
         printWindow.document.write('</tr>');
         
-        // Table data
+        // Table data with sensitive data masked
         filteredData.forEach(voter => {
-          const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
-          const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
-                        voter.identification_type === 'identification_document' ? 'ID Document' :
-                        voter.identification_type === 'passport_number' ? 'Passport' : '';
+          const safeVoter = sanitizeDataForExport(voter);
+          const dob = safeVoter.date_of_birth ? safeVoter.date_of_birth.split('T')[0] : '';
+          const idType = safeVoter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
+                        safeVoter.identification_type === 'identification_document' ? 'ID Document' :
+                        safeVoter.identification_type === 'passport_number' ? 'Passport' : '';
           
           printWindow.document.write('<tr>');
-          printWindow.document.write(`<td>${voter.full_name}</td>`);
-          printWindow.document.write(`<td>${voter.email}</td>`);
-          printWindow.document.write(`<td>${voter.organization}</td>`);
+          printWindow.document.write(`<td>${safeVoter.full_name}</td>`);
+          // Email is intentionally excluded from print for privacy
+          printWindow.document.write(`<td>${safeVoter.organization}</td>`);
           printWindow.document.write(`<td>${dob}</td>`);
-          printWindow.document.write(`<td>${voter.gender || ''}</td>`);
-          printWindow.document.write(`<td>${voter.region || ''}</td>`);
-          printWindow.document.write(`<td>${voter.constituency || ''}</td>`);
+          printWindow.document.write(`<td>${safeVoter.gender || ''}</td>`);
+          printWindow.document.write(`<td>${safeVoter.region || ''}</td>`);
+          printWindow.document.write(`<td>${safeVoter.constituency || ''}</td>`);
           printWindow.document.write(`<td>${idType}</td>`);
-          printWindow.document.write(`<td>${voter.identification_number}</td>`);
+          printWindow.document.write(`<td>${safeVoter.identification_number}</td>`);
           printWindow.document.write('</tr>');
         });
         
@@ -350,9 +318,10 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     setSelectedRows([]);
   }, [currentPage, localData]);
   
-  // Set up real-time subscription for deleted rows
+  // Set up real-time subscription for deleted rows with privacy protection
   useEffect(() => {
-    console.log("Setting up real-time subscription for voter delete events");
+    // Avoiding direct logging of sensitive data
+    console.log("Setting up real-time subscription for voter updates");
     
     const channel = supabase
       .channel('voter-delete-events')
@@ -361,7 +330,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         schema: 'public',
         table: 'voters'
       }, (payload) => {
-        console.log("Received real-time DELETE event:", payload);
+        console.log("Received real-time DELETE event");
         
         // Update local data immediately when a delete happens elsewhere
         if (payload.old && payload.old.id) {
@@ -385,13 +354,13 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       try {
         supabase.removeChannel(channel);
       } catch (error) {
-        console.error("Error removing delete events channel:", error);
+        console.error("Error removing delete events channel");
       }
     };
   }, []);
 
-  // Updated VoterRow component - without individual delete button
-  const VoterRow = ({ voter, isSelected, onToggleSelect }) => {
+  // Updated VoterRow component - with no selection checkbox
+  const VoterRow = ({ voter }) => {
     const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
     const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
                   voter.identification_type === 'identification_document' ? 'ID Document' :
@@ -399,13 +368,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     
     return (
       <TableRow key={voter.id}>
-        <TableCell>
-          <Checkbox 
-            checked={isSelected}
-            onCheckedChange={() => onToggleSelect(voter.id)}
-            aria-label={`Select ${voter.full_name}`}
-          />
-        </TableCell>
         <TableCell>{voter.full_name}</TableCell>
         <TableCell>{voter.organization}</TableCell>
         <TableCell>{dob}</TableCell>
@@ -423,17 +385,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <h2 className="text-xl font-semibold">Registration Data</h2>
         <div className="flex flex-wrap items-center gap-2">
-          {selectedRows.length > 0 && (
-            <Button 
-              variant="destructive" 
-              onClick={deleteSelectedRows} 
-              className="flex items-center gap-2"
-              disabled={isDeleting}
-            >
-              <Trash2 size={16} />
-              {isDeleting ? 'Deleting...' : `Delete Selected (${selectedRows.length})`}
-            </Button>
-          )}
           <Button variant="outline" onClick={clearFilters} className="flex items-center gap-2">
             <Filter size={16} />
             Clear Filters
@@ -453,13 +404,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         <Table>
           <TableHeader>
             <TableRow>
-              <TableHead className="w-12">
-                <Checkbox 
-                  checked={paginatedData.length > 0 && selectedRows.length === paginatedData.length} 
-                  onCheckedChange={selectAllRows}
-                  aria-label="Select all"
-                />
-              </TableHead>
               <TableHead>
                 <div className="space-y-1">
                   <div>Full Name</div>
@@ -572,8 +516,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                 <VoterRow 
                   key={voter.id} 
                   voter={voter}
-                  isSelected={selectedRows.includes(voter.id)}
-                  onToggleSelect={toggleRowSelection}
                 />
               ))
             )}
@@ -628,9 +570,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
           Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, localData.length)} of {localData.length} registrations
           {localData.length !== voterData.length && ` (filtered from ${voterData.length} total)`}
         </p>
-        {selectedRows.length > 0 && (
-          <p className="mt-1">{selectedRows.length} record(s) selected</p>
-        )}
       </div>
     </Card>
   );
