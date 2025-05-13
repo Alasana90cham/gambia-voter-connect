@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -143,10 +142,9 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     const headers = "Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
     let csvContent = headers;
     
-    // Add the filtered data rows with sensitive info redacted for export
+    // Add the filtered data rows with full information (no redaction for admins)
     filteredData.forEach(voter => {
-      const safeVoter = sanitizeDataForExport(voter);
-      csvContent += formatForExport(safeVoter) + "\n";
+      csvContent += formatForExport(voter) + "\n";
     });
     
     // Create a blob and trigger download
@@ -166,28 +164,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     });
   };
 
-  // Function to sanitize sensitive data before exporting
-  const sanitizeDataForExport = (voter: VoterData): VoterData => {
-    // Create a copy to avoid modifying the original data
-    const sanitized = { ...voter };
-    
-    // Mask email addresses
-    if (sanitized.email) {
-      const parts = sanitized.email.split('@');
-      if (parts.length === 2) {
-        sanitized.email = `${parts[0].substring(0, 2)}${'*'.repeat(parts[0].length - 2)}@${parts[1]}`;
-      }
-    }
-    
-    // Mask identification numbers (show only last 4 characters)
-    if (sanitized.identification_number && sanitized.identification_number.length > 4) {
-      sanitized.identification_number = '*'.repeat(sanitized.identification_number.length - 4) + 
-        sanitized.identification_number.slice(-4);
-    }
-    
-    return sanitized;
-  };
-  
   const handlePrint = () => {
     if (tableRef.current) {
       const printWindow = window.open('', '_blank');
@@ -206,6 +182,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         // Table headers
         printWindow.document.write('<tr>');
         printWindow.document.write('<th>Full Name</th>');
+        printWindow.document.write('<th>Email</th>'); // Now including email for admin print
         printWindow.document.write('<th>Organization</th>');
         printWindow.document.write('<th>Date of Birth</th>');
         printWindow.document.write('<th>Gender</th>');
@@ -215,24 +192,23 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         printWindow.document.write('<th>ID Number</th>');
         printWindow.document.write('</tr>');
         
-        // Table data with sensitive data masked
+        // Table data with full information (no masking for admins)
         filteredData.forEach(voter => {
-          const safeVoter = sanitizeDataForExport(voter);
-          const dob = safeVoter.date_of_birth ? safeVoter.date_of_birth.split('T')[0] : '';
-          const idType = safeVoter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
-                        safeVoter.identification_type === 'identification_document' ? 'ID Document' :
-                        safeVoter.identification_type === 'passport_number' ? 'Passport' : '';
+          const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+          const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
+                        voter.identification_type === 'identification_document' ? 'ID Document' :
+                        voter.identification_type === 'passport_number' ? 'Passport' : '';
           
           printWindow.document.write('<tr>');
-          printWindow.document.write(`<td>${safeVoter.full_name}</td>`);
-          // Email is intentionally excluded from print for privacy
-          printWindow.document.write(`<td>${safeVoter.organization}</td>`);
+          printWindow.document.write(`<td>${voter.full_name}</td>`);
+          printWindow.document.write(`<td>${voter.email}</td>`); // Show full email
+          printWindow.document.write(`<td>${voter.organization}</td>`);
           printWindow.document.write(`<td>${dob}</td>`);
-          printWindow.document.write(`<td>${safeVoter.gender || ''}</td>`);
-          printWindow.document.write(`<td>${safeVoter.region || ''}</td>`);
-          printWindow.document.write(`<td>${safeVoter.constituency || ''}</td>`);
+          printWindow.document.write(`<td>${voter.gender || ''}</td>`);
+          printWindow.document.write(`<td>${voter.region || ''}</td>`);
+          printWindow.document.write(`<td>${voter.constituency || ''}</td>`);
           printWindow.document.write(`<td>${idType}</td>`);
-          printWindow.document.write(`<td>${safeVoter.identification_number}</td>`);
+          printWindow.document.write(`<td>${voter.identification_number}</td>`); // Show full ID number
           printWindow.document.write('</tr>');
         });
         

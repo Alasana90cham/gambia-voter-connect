@@ -29,6 +29,6 @@ export const formatForExport = (voter: VoterData) => {
                 voter.identification_type === 'identification_document' ? 'ID Document' :
                 voter.identification_type === 'passport_number' ? 'Passport' : '';
   
-  // Exclude email from export string to protect privacy
+  // No masking for admin exports - show complete data
   return `"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"`;
 };
