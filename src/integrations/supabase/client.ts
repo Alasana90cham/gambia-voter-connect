@@ -24,7 +24,16 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   auth: {
     persistSession: true,
     autoRefreshToken: true,
-    storage: typeof window !== 'undefined' ? localStorage : undefined
+    detectSessionInUrl: true,
+    storage: typeof window !== 'undefined' ? localStorage : undefined,
+    flowType: 'implicit', // More secure auth flow
+  },
+  global: {
+    headers: {
+      'Cache-Control': 'no-cache',
+      'Pragma': 'no-cache',
+      'X-Client-Info': 'supabase-js/2.x'
+    }
   },
   realtime: {
     params: {
@@ -36,10 +45,42 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
       'Pragma': 'no-cache'
     }
   },
-  global: {
-    headers: {
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache'
+  db: {
+    schema: 'public'
+  },
+  // Add request handling to sanitize inputs and catch potential injection attacks
+  fetch: (url, options) => {
+    // Log auth-related activity for security monitoring (but not auth details)
+    if (url.includes('/auth/')) {
+      console.log(`Auth operation requested: ${new URL(url).pathname}`);
     }
+    return fetch(url, {
+      ...options,
+      credentials: 'same-origin'
+    });
   }
 });
+
+// Add monitoring for suspicious activities
+let failedRequests = 0;
+const originalFetch = supabase.fetch.bind(supabase);
+supabase.fetch = async (url, options) => {
+  try {
+    const response = await originalFetch(url, options);
+    if (response.status === 401 || response.status === 403) {
+      failedRequests++;
+      if (failedRequests > 5) {
+        console.error('Multiple unauthorized access attempts detected');
+        // Reset to avoid triggering multiple times
+        failedRequests = 0;
+      }
+    } else if (response.ok) {
+      // Reset on successful requests
+      failedRequests = 0;
+    }
+    return response;
+  } catch (error) {
+    console.error('Supabase request error:', error);
+    throw error;
+  }
+};

@@ -1,12 +1,9 @@
 
 // Service Worker for caching and offline support
-const CACHE_NAME = 'nypg-voter-cache-v1';
+const CACHE_NAME = 'nypg-voter-cache-v2';
 const urlsToCache = [
   '/',
   '/index.html',
-  '/assets/index.css',
-  '/assets/index.js',
-  '/favicon.ico',
 ];
 
 // Install the service worker and cache core assets
@@ -14,46 +11,48 @@ self.addEventListener('install', event => {
   event.waitUntil(
     caches.open(CACHE_NAME)
       .then(cache => {
-        return cache.addAll(urlsToCache);
+        console.log('Cache opened successfully');
+        // Use individual add() operations instead of addAll() to prevent failures
+        return Promise.all(
+          urlsToCache.map(url => 
+            cache.add(url).catch(err => 
+              console.error(`Failed to cache ${url}: ${err}`)
+            )
+          )
+        );
       })
   );
 });
 
 // Network-first strategy with cache fallback
 self.addEventListener('fetch', event => {
-  // Skip non-HTTP/HTTPS requests
-  if (!event.request.url.startsWith('http')) {
-    return;
-  }
-
-  // Skip chrome-extension requests completely
-  if (event.request.url.startsWith('chrome-extension:')) {
+  // Skip non-HTTP/HTTPS and extension requests
+  if (!event.request.url.startsWith('http') || 
+      event.request.url.startsWith('chrome-extension:')) {
     return;
   }
 
   event.respondWith(
     fetch(event.request)
       .then(response => {
-        // Cache the fetched response for future
+        // Only cache successful responses
         if (response.status === 200) {
-          // Clone the response so we can return one and cache one
-          const responseClone = response.clone();
-          caches.open(CACHE_NAME).then(cache => {
-            try {
+          try {
+            const responseClone = response.clone();
+            caches.open(CACHE_NAME).then(cache => {
               // Check for valid schemes before caching
               const url = new URL(event.request.url);
               if (url.protocol === 'http:' || url.protocol === 'https:') {
                 cache.put(event.request, responseClone);
               }
-            } catch (err) {
-              console.error('Cache put error:', err);
-            }
-          });
+            });
+          } catch (err) {
+            console.error('Cache put error:', err);
+          }
         }
         return response;
       })
       .catch(() => {
-        // If network request fails, serve from cache
         return caches.match(event.request);
       })
   );

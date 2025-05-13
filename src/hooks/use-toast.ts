@@ -25,9 +25,35 @@ const actionTypes = {
 
 let count = 0
 
+// Safely sanitize any error messages to prevent leaking sensitive info
+const sanitizeErrorMessage = (message: string): string => {
+  // Check for common patterns that might reveal sensitive info
+  if (message.includes("password") || 
+      message.includes("secret") || 
+      message.includes("key") ||
+      message.includes("token") ||
+      message.includes("authorization")) {
+    return "An error occurred. Please try again.";
+  }
+  
+  // Obscure any potential SQL error details
+  if (message.includes("SQL") ||
+      message.includes("syntax") ||
+      message.includes("query") ||
+      message.includes("database")) {
+    return "A database error occurred. Please contact support.";
+  }
+  
+  // Remove any potential stack traces
+  if (message.includes("at ") && message.includes(".js:")) {
+    return "An unexpected error occurred.";
+  }
+  
+  return message;
+};
+
 function genId() {
-  count = (count + 1) % Number.MAX_VALUE
-  return count.toString()
+  return (Date.now() + Math.floor(Math.random() * 10000)).toString(36)
 }
 
 type ActionType = typeof actionTypes
@@ -39,7 +65,7 @@ type Action =
     }
   | {
       type: ActionType["UPDATE_TOAST"]
-      toast: Partial<ToasterToast>
+      toast: Partial<ToasterToast> & { id: string }
     }
   | {
       type: ActionType["DISMISS_TOAST"]
@@ -127,7 +153,7 @@ export const reducer = (state: State, action: Action): State => {
   }
 }
 
-const listeners: Array<(state: State) => void> = []
+const listeners: ((state: State) => void)[] = []
 
 let memoryState: State = { toasts: [] }
 
@@ -141,6 +167,11 @@ function dispatch(action: Action) {
 type Toast = Omit<ToasterToast, "id">
 
 function toast({ ...props }: Toast) {
+  // Sanitize any potential sensitive error messages
+  if (props.variant === "destructive" && typeof props.description === "string") {
+    props.description = sanitizeErrorMessage(props.description as string);
+  }
+  
   const id = genId()
 
   const update = (props: ToasterToast) =>
