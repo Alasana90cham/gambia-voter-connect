@@ -33,6 +33,16 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache',
       'X-Client-Info': 'supabase-js/2.x'
+    },
+    fetch: (url, options) => {
+      const timeout = 30000; // 30 seconds timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
+      
+      return fetch(url, {
+        ...options,
+        signal: controller.signal,
+      }).finally(() => clearTimeout(timeoutId));
     }
   },
   realtime: {
@@ -50,10 +60,41 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   }
 });
 
-// Add monitoring for suspicious activities
+// Optimized connection pooling and request monitoring
 let failedRequests = 0;
+const maxRetries = 3;
+const connectionPool = new Set();
+const maxPoolSize = 25;
 
-// Use event listeners to monitor request failures
+// Enhanced error handling with retry logic
+const handleRequestWithRetry = async (requestFn) => {
+  let retries = 0;
+  while (retries < maxRetries) {
+    try {
+      if (connectionPool.size >= maxPoolSize) {
+        await new Promise(resolve => setTimeout(resolve, 50 * (retries + 1)));
+      }
+      
+      const requestId = Date.now() + Math.random();
+      connectionPool.add(requestId);
+      
+      const result = await requestFn();
+      
+      connectionPool.delete(requestId);
+      return result;
+    } catch (error) {
+      retries++;
+      if (retries >= maxRetries) {
+        console.error('Maximum retries reached for Supabase request');
+        throw error;
+      }
+      // Exponential backoff
+      await new Promise(resolve => setTimeout(resolve, 200 * Math.pow(2, retries)));
+    }
+  }
+};
+
+// Monitor for authentication failures
 supabase.auth.onAuthStateChange((event, session) => {
   if (event === 'SIGNED_OUT') {
     console.log('User signed out');
@@ -63,27 +104,25 @@ supabase.auth.onAuthStateChange((event, session) => {
   }
 });
 
-// Monitor for authentication failures
-const originalAuthRequest = supabase.auth.signInWithPassword;
+// Enhance original auth methods with retry logic
+const originalSignIn = supabase.auth.signInWithPassword;
 supabase.auth.signInWithPassword = async (credentials) => {
-  try {
-    const response = await originalAuthRequest(credentials);
-    if (response.error) {
-      failedRequests++;
-      if (failedRequests > 5) {
-        console.error('Multiple failed login attempts detected');
-        // Reset to avoid triggering multiple times
-        setTimeout(() => {
-          failedRequests = 0;
-        }, 15 * 60 * 1000); // Reset after 15 minutes
+  return handleRequestWithRetry(async () => {
+    try {
+      const response = await originalSignIn(credentials);
+      if (response.error) {
+        failedRequests++;
+        if (failedRequests > 5) {
+          console.error('Multiple failed login attempts detected');
+          setTimeout(() => { failedRequests = 0; }, 15 * 60 * 1000);
+        }
+      } else {
+        failedRequests = 0;
       }
-    } else {
-      // Reset on successful login
-      failedRequests = 0;
+      return response;
+    } catch (error) {
+      console.error('Supabase auth error:', error);
+      throw error;
     }
-    return response;
-  } catch (error) {
-    console.error('Supabase auth error:', error);
-    throw error;
-  }
+  });
 };

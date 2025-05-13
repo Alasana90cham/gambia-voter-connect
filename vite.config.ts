@@ -9,6 +9,9 @@ export default defineConfig(({ mode }) => ({
   server: {
     host: "::",
     port: 8080,
+    watch: {
+      usePolling: false // Reduce CPU usage in development
+    }
   },
   plugins: [
     react(),
@@ -38,14 +41,25 @@ export default defineConfig(({ mode }) => ({
     // Optimize asset compression
     assetsInlineLimit: 4096,
     // Enable source maps for better error tracking
-    sourcemap: true,
+    sourcemap: mode !== 'production',
     // Minify output 
     minify: 'terser',
     terserOptions: {
       compress: {
-        drop_console: false, // Keep console logs for debugging in production
-        drop_debugger: true // Remove debugger statements in production
+        drop_console: mode === 'production', // Remove console logs in production
+        drop_debugger: true, // Remove debugger statements in production
+        passes: 2 // Run multiple passes for better compression
       }
-    }
+    },
+    // Speed up build time
+    reportCompressedSize: false,
+    chunkSizeWarningLimit: 1000
+  },
+  optimizeDeps: {
+    include: ['react', 'react-dom', 'react-router-dom', '@supabase/supabase-js']
+  },
+  preview: {
+    port: 4173,
+    host: 'localhost'
   },
 }));
