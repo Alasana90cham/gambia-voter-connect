@@ -18,7 +18,7 @@
     X-XSS-Protection = "1; mode=block"
     X-Content-Type-Options = "nosniff"
     Referrer-Policy = "strict-origin-when-cross-origin"
-    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://fhyhyfoqzpkzkxbkqcdp.supabase.co;"
+    Content-Security-Policy = "default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.gpteng.co; style-src 'self' 'unsafe-inline'; img-src 'self' data: https:; connect-src 'self' https://fhyhyfoqzpkzkxbkqcdp.supabase.co wss://fhyhyfoqzpkzkxbkqcdp.supabase.co;"
     Permissions-Policy = "camera=(), microphone=(), geolocation=()"
 
 # Set cache control headers for faster loading
@@ -37,7 +37,7 @@
   [headers.values]
     Cache-Control = "public, max-age=0, must-revalidate"
 
-# Enable SPA routing
+# Enable SPA routing - this is critical for Vercel and Netlify deployments
 [[redirects]]
   from = "/*"
   to = "/index.html"

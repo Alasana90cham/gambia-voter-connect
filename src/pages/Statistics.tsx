@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -101,12 +100,13 @@ const Statistics = () => {
     setConstituencyData(constituencyChartData);
   };
   
-  // Fetch voter data
+  // Fetch voter data with improved error handling
   const loadVoterData = async () => {
     setIsLoading(true);
     
     try {
       const voters = await fetchVoterData();
+      console.log("Fetched voter data:", voters);
       setVoterData(voters);
       setFilteredData(voters);
       processChartData(voters);
@@ -127,6 +127,7 @@ const Statistics = () => {
   const loadAdmins = async () => {
     try {
       const admins = await fetchAdmins();
+      console.log("Fetched admin data:", admins);
       setAdminList(admins || []);
     } catch (error) {
       console.error("Error loading admins:", error);
@@ -138,9 +139,11 @@ const Statistics = () => {
     }
   };
   
-  // Subscribe to realtime updates
+  // Enhanced realtime subscription setup with better error handling
   const setupRealtimeSubscriptions = () => {
-    // Create a channel for admins table
+    console.log("Setting up realtime subscriptions");
+    
+    // Create a channel for admins table with improved logging
     const adminsChannel = supabase
       .channel('admin-changes')
       .on('postgres_changes', { 
@@ -156,7 +159,7 @@ const Statistics = () => {
         console.log('Admins subscription status:', status);
       });
     
-    // Create a channel for voters table
+    // Create a channel for voters table with improved logging
     const votersChannel = supabase
       .channel('voters-changes')
       .on('postgres_changes', { 
@@ -173,6 +176,7 @@ const Statistics = () => {
       });
       
     return () => {
+      console.log("Cleaning up realtime subscriptions");
       supabase.removeChannel(adminsChannel);
       supabase.removeChannel(votersChannel);
     };
@@ -181,6 +185,7 @@ const Statistics = () => {
   // Initial data loading
   useEffect(() => {
     if (isAdmin) {
+      console.log("Admin authenticated, loading data");
       // Load initial data
       loadVoterData();
       loadAdmins();

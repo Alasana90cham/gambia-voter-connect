@@ -39,7 +39,6 @@ const RegionStep: React.FC<RegionStepProps> = ({ selectedRegion, updateFormData 
         <Label className="mb-3 block">Region <span className="text-red-500">*</span></Label>
         <RadioGroup 
           value={selectedRegion || ''} 
-          onValueChange={(value) => updateFormData({ region: value as GambiaRegion })}
           className="grid gap-4"
         >
           {regions.map((region) => (
