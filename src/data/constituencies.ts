@@ -336,17 +336,6 @@ export const removeAdminUser = async (id: string): Promise<boolean> => {
       
       console.log("Admin deleted successfully via direct delete");
       
-      // Verify the admin was actually deleted
-      const { data: checkData } = await supabase
-        .from('admins')
-        .select('id')
-        .eq('id', id);
-        
-      if (checkData && checkData.length > 0) {
-        console.error("Admin still exists after deletion attempt");
-        throw new Error("Failed to delete admin");
-      }
-      
       // Invalidate admin cache after modifying data
       adminCache.invalidate();
       

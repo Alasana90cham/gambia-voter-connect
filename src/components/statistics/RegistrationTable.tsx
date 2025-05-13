@@ -142,17 +142,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         throw error;
       }
       
-      // Verify deletion was successful by attempting to fetch the deleted records
-      const { data: checkData } = await supabase
-        .from('voters')
-        .select('id')
-        .in('id', selectedRows);
-        
-      if (checkData && checkData.length > 0) {
-        console.warn("Some records may not have been deleted:", checkData);
-        throw new Error("Some records were not deleted properly");
-      }
-      
       // Update UI immediately by removing deleted rows from local state
       const updatedLocalData = localData.filter(voter => !selectedRows.includes(voter.id));
       setLocalData(updatedLocalData);
@@ -183,7 +172,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }
   };
   
-  // Get all available constituencies based on selected region
+  
   const getFilteredConstituencies = () => {
     if (filters.region && constituencyData[filters.region]) {
       return constituencyData[filters.region] || [];

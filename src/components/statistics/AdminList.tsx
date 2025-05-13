@@ -4,9 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { Trash2 } from 'lucide-react';
 import { UserRole } from '@/types/form';
-import { deleteAdmin } from '@/utils/adminOperations';
 import { toast } from "@/components/ui/use-toast";
-import { supabase } from '@/integrations/supabase/client';
+import { supabase } from "@/integrations/supabase/client";
 
 interface AdminListProps {
   adminList: UserRole[];
@@ -16,10 +15,31 @@ interface AdminListProps {
 const AdminList: React.FC<AdminListProps> = ({ adminList, onAdminDeleted }) => {
   const handleDeleteAdmin = async (id: string) => {
     try {
-      // First attempt to delete using the utility function that calls RPC
-      await deleteAdmin(id, adminList.length);
+      console.log("Attempting to delete admin:", id);
       
-      // Fallback: Directly delete from the database if needed
+      // First attempt to delete using the utility function that calls RPC
+      try {
+        const { error } = await supabase.rpc('delete_admin', { admin_id: id });
+        
+        if (error) {
+          console.error("RPC delete error:", error);
+          // Fall through to direct delete
+        } else {
+          // Success with RPC
+          console.log("Admin deleted successfully via RPC");
+          onAdminDeleted();
+          toast({
+            title: "Admin Deleted",
+            description: "Admin user has been successfully removed",
+          });
+          return;
+        }
+      } catch (rpcError) {
+        console.error("Exception in RPC delete:", rpcError);
+        // Fall through to direct delete
+      }
+      
+      // Fallback: Directly delete from the database
       const { error } = await supabase
         .from('admins')
         .delete()
@@ -29,6 +49,8 @@ const AdminList: React.FC<AdminListProps> = ({ adminList, onAdminDeleted }) => {
         console.error("Direct deletion error:", error);
         throw error;
       }
+      
+      console.log("Admin deleted successfully via direct deletion");
       
       // Notify parent component to refresh the admin list
       onAdminDeleted();
