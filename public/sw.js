@@ -21,14 +21,24 @@ self.addEventListener('install', event => {
 
 // Network-first strategy with cache fallback
 self.addEventListener('fetch', event => {
+  // Skip chrome-extension requests and other non-HTTP/HTTPS requests
+  if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
   event.respondWith(
     fetch(event.request)
       .then(response => {
         // Cache the fetched response for future
         if (response.status === 200) {
+          // Clone the response so we can return one and cache one
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => {
-            cache.put(event.request, responseClone);
+            try {
+              cache.put(event.request, responseClone);
+            } catch (err) {
+              console.error('Cache put error:', err);
+            }
           });
         }
         return response;
