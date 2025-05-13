@@ -1,10 +1,12 @@
+
 import React, { useState, useRef } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Filter, Download, Printer, Search } from 'lucide-react';
+import { Filter, Download, Printer, Search, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { toast } from "@/components/ui/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Command,
   CommandEmpty,
@@ -17,6 +19,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ChartData {
   name: string;
@@ -66,6 +69,8 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
 }) => {
   const tableRef = useRef<HTMLDivElement>(null);
   const [constituencySearchOpen, setConstituencySearchOpen] = useState(false);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [isDeleting, setIsDeleting] = useState(false);
   
   const handleFilterChange = (field: keyof FilterState, value: string) => {
     onUpdateFilters({
@@ -85,6 +90,66 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       identificationType: '',
       identificationNumber: ''
     });
+  };
+  
+  const toggleRowSelection = (id: string) => {
+    if (selectedRows.includes(id)) {
+      setSelectedRows(selectedRows.filter(rowId => rowId !== id));
+    } else {
+      setSelectedRows([...selectedRows, id]);
+    }
+  };
+  
+  const selectAllRows = () => {
+    if (selectedRows.length === filteredData.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(filteredData.map(voter => voter.id));
+    }
+  };
+  
+  const deleteSelectedRows = async () => {
+    if (selectedRows.length === 0) {
+      toast({
+        title: "No Rows Selected",
+        description: "Please select at least one row to delete.",
+        variant: "destructive",
+      });
+      return;
+    }
+    
+    try {
+      setIsDeleting(true);
+      
+      // Delete voters from Supabase
+      const { error } = await supabase
+        .from('voters')
+        .delete()
+        .in('id', selectedRows);
+      
+      if (error) {
+        throw error;
+      }
+      
+      toast({
+        title: "Records Deleted",
+        description: `${selectedRows.length} record(s) have been deleted successfully.`,
+        variant: "default",
+      });
+      
+      // Reset selection
+      setSelectedRows([]);
+      
+    } catch (error) {
+      console.error("Error deleting records:", error);
+      toast({
+        title: "Deletion Failed",
+        description: "There was an error deleting the selected records.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+    }
   };
   
   // Get all available constituencies based on selected region, or all constituencies if no region selected
@@ -204,7 +269,18 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     <Card className="p-6 mb-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <h2 className="text-xl font-semibold">Registration Data</h2>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {selectedRows.length > 0 && (
+            <Button 
+              variant="destructive" 
+              onClick={deleteSelectedRows} 
+              className="flex items-center gap-2"
+              disabled={isDeleting}
+            >
+              <Trash2 size={16} />
+              {isDeleting ? 'Deleting...' : `Delete (${selectedRows.length})`}
+            </Button>
+          )}
           <Button variant="outline" onClick={clearFilters} className="flex items-center gap-2">
             <Filter size={16} />
             Clear Filters
@@ -224,6 +300,13 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-12">
+                <Checkbox 
+                  checked={selectedRows.length === filteredData.length && filteredData.length > 0} 
+                  onCheckedChange={selectAllRows}
+                  aria-label="Select all"
+                />
+              </TableHead>
               <TableHead>
                 <div className="space-y-1">
                   <div>Full Name</div>
@@ -331,13 +414,20 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
           <TableBody>
             {filteredData.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={8} className="text-center py-4">
+                <TableCell colSpan={9} className="text-center py-4">
                   No matching records found
                 </TableCell>
               </TableRow>
             ) : (
               filteredData.map((voter, index) => (
                 <TableRow key={voter.id || index}>
+                  <TableCell>
+                    <Checkbox 
+                      checked={selectedRows.includes(voter.id)}
+                      onCheckedChange={() => toggleRowSelection(voter.id)}
+                      aria-label={`Select ${voter.full_name}`}
+                    />
+                  </TableCell>
                   <TableCell>{voter.full_name}</TableCell>
                   <TableCell>{voter.organization}</TableCell>
                   <TableCell>{voter.date_of_birth ? voter.date_of_birth.split('T')[0] : ''}</TableCell>
@@ -358,6 +448,9 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       </div>
       <div className="mt-4 text-sm text-gray-600">
         <p>Showing {filteredData.length} of {voterData.length} registrations</p>
+        {selectedRows.length > 0 && (
+          <p className="mt-1">{selectedRows.length} record(s) selected</p>
+        )}
       </div>
     </Card>
   );

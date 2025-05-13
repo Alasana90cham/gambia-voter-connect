@@ -20,6 +20,10 @@ const RegionStep: React.FC<RegionStepProps> = ({ selectedRegion, updateFormData 
     'Upper River'
   ];
 
+  const handleRegionClick = (region: GambiaRegion) => {
+    updateFormData({ region });
+  };
+
   return (
     <div>
       <h2 className="text-2xl font-bold text-gray-800 mb-6">Select Your Region</h2>
@@ -39,7 +43,11 @@ const RegionStep: React.FC<RegionStepProps> = ({ selectedRegion, updateFormData 
           className="grid gap-4"
         >
           {regions.map((region) => (
-            <div key={region} className="flex items-center space-x-2 bg-white p-3 rounded-md border hover:border-primary transition-all">
+            <div 
+              key={region} 
+              className="flex items-center space-x-2 bg-white p-3 rounded-md border hover:border-primary transition-all cursor-pointer"
+              onClick={() => handleRegionClick(region)}
+            >
               <RadioGroupItem value={region} id={region} />
               <Label htmlFor={region} className="cursor-pointer w-full">{region} Region</Label>
             </div>
