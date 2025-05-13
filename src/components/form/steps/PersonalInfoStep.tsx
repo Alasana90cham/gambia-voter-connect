@@ -1,5 +1,5 @@
 
-import React, { useState } from 'react';
+import React, { useState, useCallback, useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
@@ -12,6 +12,7 @@ import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from '@/components/ui/use-toast';
+import { useQuery } from '@tanstack/react-query';
 
 interface PersonalInfoStepProps {
   formData: VoterFormData;
@@ -20,17 +21,51 @@ interface PersonalInfoStepProps {
 
 const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFormData }) => {
   // Calculate min/max date for date restrictions (1990-2010)
-  const minDate = new Date(1990, 0, 1);
-  const maxDate = new Date(2010, 11, 31);
+  const minDate = useMemo(() => new Date(1990, 0, 1), []);
+  const maxDate = useMemo(() => new Date(2010, 11, 31), []);
   
   // Default calendar date to show in the middle of the allowed range
-  const defaultCalendarDate = new Date(2000, 0, 1);
+  const defaultCalendarDate = useMemo(() => new Date(2000, 0, 1), []);
   
   // State for email validation
-  const [isCheckingEmail, setIsCheckingEmail] = useState(false);
   const [emailError, setEmailError] = useState<string | null>(null);
   
-  const handleEmailChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Use React Query for email validation
+  const { refetch: checkEmail, isFetching: isCheckingEmail } = useQuery({
+    queryKey: ['emailCheck', formData.email],
+    queryFn: async () => {
+      if (!formData.email) return null;
+      
+      // Check email format
+      const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+      if (!emailRegex.test(formData.email)) {
+        throw new Error("Please enter a valid email address");
+      }
+      
+      // Check if email already exists in database
+      const { data, error } = await supabase
+        .from('voters')
+        .select('email')
+        .eq('email', formData.email)
+        .maybeSingle();
+      
+      if (error) {
+        console.error('Error checking email:', error);
+        throw error;
+      }
+      
+      if (data) {
+        throw new Error("This email has already been registered");
+      }
+      
+      return data;
+    },
+    enabled: false, // Don't run on mount, only when manually triggered
+    retry: false, // Don't retry failed queries
+    refetchOnWindowFocus: false,
+  });
+  
+  const handleEmailChange = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const email = e.target.value;
     updateFormData({ email });
     
@@ -40,40 +75,35 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
     // If email is empty, don't check
     if (!email) return;
     
-    // Check email format
-    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-    if (!emailRegex.test(email)) {
-      setEmailError("Please enter a valid email address");
-      return;
-    }
+    // Debounce email check for better UX
+    const timeoutId = setTimeout(async () => {
+      try {
+        await checkEmail();
+      } catch (error) {
+        setEmailError(error.message);
+        
+        if (error.message.includes("already been registered")) {
+          toast({
+            title: "Email already registered",
+            description: "This email address is already registered in our system",
+            variant: "destructive",
+          });
+        }
+      }
+    }, 500); // 500ms debounce
     
-    try {
-      setIsCheckingEmail(true);
-      
-      // Check if email already exists in database
-      const { data, error } = await supabase
-        .from('voters')
-        .select('email')
-        .eq('email', email)
-        .maybeSingle();
-      
-      if (error) {
-        console.error('Error checking email:', error);
-        return;
-      }
-      
-      if (data) {
-        setEmailError("This email has already been registered");
-        toast({
-          title: "Email already registered",
-          description: "This email address is already registered in our system",
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setIsCheckingEmail(false);
-    }
-  };
+    return () => clearTimeout(timeoutId);
+  }, [updateFormData, checkEmail]);
+  
+  // Memoize date selection handler
+  const handleDateSelect = useCallback((date: Date | undefined) => {
+    updateFormData({ dateOfBirth: date });
+  }, [updateFormData]);
+  
+  // Memoize gender selection handler
+  const handleGenderChange = useCallback((value: string) => {
+    updateFormData({ gender: value as 'male' | 'female' });
+  }, [updateFormData]);
   
   return (
     <div>
@@ -155,7 +185,7 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
                 <Calendar
                   mode="single"
                   selected={formData.dateOfBirth || undefined}
-                  onSelect={(date) => updateFormData({ dateOfBirth: date })}
+                  onSelect={handleDateSelect}
                   disabled={(date) => date < minDate || date > maxDate}
                   defaultMonth={formData.dateOfBirth || defaultCalendarDate}
                   initialFocus
@@ -176,7 +206,7 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
           <Label>Gender <span className="text-red-500">*</span></Label>
           <RadioGroup 
             value={formData.gender || ''} 
-            onValueChange={(value) => updateFormData({ gender: value as 'male' | 'female' })}
+            onValueChange={handleGenderChange}
             className="flex space-x-6"
           >
             <div className="flex items-center space-x-2">

@@ -19,6 +19,12 @@
     <meta name="twitter:title" content="National Youth Parliament Gambia - Voter Registration" />
     <meta name="twitter:description" content="Official voter registration platform for the National Youth Parliament Gambia. Register to vote in upcoming elections." />
     <meta name="twitter:image" content="https://i.ibb.co/JzyCHnc/nypg-logo.jpg" />
+    
+    <!-- PWA Meta Tags -->
+    <meta name="theme-color" content="#0067A5" />
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black">
+    <link rel="manifest" href="/manifest.json">
   </head>
 
   <body>
@@ -26,5 +32,19 @@
     <!-- IMPORTANT: DO NOT REMOVE THIS SCRIPT TAG OR THIS VERY COMMENT! -->
     <script src="https://cdn.gpteng.co/gptengineer.js" type="module"></script>
     <script type="module" src="/src/main.tsx"></script>
+    <script>
+      // Register service worker for caching and offline support
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('/sw.js')
+            .then(registration => {
+              console.log('ServiceWorker registration successful');
+            })
+            .catch(error => {
+              console.log('ServiceWorker registration failed:', error);
+            });
+        });
+      }
+    </script>
   </body>
 </html>

@@ -7,10 +7,17 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import Index from "./pages/Index";
 import Statistics from "./pages/Statistics";
 import NotFound from "./pages/NotFound";
+import { Suspense, lazy } from "react";
 
-const queryClient = new QueryClient();
+// Use prop to receive optimized queryClient from main.tsx
+interface AppProps {
+  queryClient: QueryClient;
+}
 
-const App = () => (
+// Implement route-based code splitting with lazy loading
+const LazyStatistics = lazy(() => import("./pages/Statistics"));
+
+const App = ({ queryClient = new QueryClient() }: AppProps) => (
   <QueryClientProvider client={queryClient}>
     <TooltipProvider>
       <Toaster />
@@ -18,7 +25,14 @@ const App = () => (
       <BrowserRouter>
         <Routes>
           <Route path="/" element={<Index />} />
-          <Route path="/statistics" element={<Statistics />} />
+          <Route 
+            path="/statistics" 
+            element={
+              <Suspense fallback={<div className="flex h-screen w-full items-center justify-center">Loading...</div>}>
+                <LazyStatistics />
+              </Suspense>
+            } 
+          />
           {/* ADD ALL CUSTOM ROUTES ABOVE THE CATCH-ALL "*" ROUTE */}
           <Route path="*" element={<NotFound />} />
         </Routes>

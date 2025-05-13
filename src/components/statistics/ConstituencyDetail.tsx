@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Card } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -17,6 +17,19 @@ interface ConstituencyDetailProps {
   onRegionChange: (region: string) => void;
 }
 
+// Custom chart tooltip to optimize rendering
+const CustomTooltip = ({ active, payload, label }: any) => {
+  if (active && payload && payload.length) {
+    return (
+      <div className="bg-white p-3 border rounded shadow-md">
+        <p className="font-semibold">{`${payload[0].payload.name}`}</p>
+        <p className="text-sm">{`Registrations: ${payload[0].value}`}</p>
+      </div>
+    );
+  }
+  return null;
+};
+
 const ConstituencyDetail: React.FC<ConstituencyDetailProps> = ({
   selectedRegion,
   regionData,
@@ -26,20 +39,31 @@ const ConstituencyDetail: React.FC<ConstituencyDetailProps> = ({
   const [searchTerm, setSearchTerm] = useState('');
   const [filteredConstituencies, setFilteredConstituencies] = useState<ChartData[]>([]);
   
-  // Ensure we have valid constituency data for the selected region
+  // Convert constituencies data for memoization
+  const availableConstituencies = useMemo(() => 
+    constituencyData[selectedRegion] || [],
+  [constituencyData, selectedRegion]);
+  
+  // Filter constituencies with debouncing
   useEffect(() => {
-    const regionConstituencies = constituencyData[selectedRegion] || [];
+    const handler = setTimeout(() => {
+      const filtered = searchTerm 
+        ? availableConstituencies.filter(constituency => 
+            constituency.name.toLowerCase().includes(searchTerm.toLowerCase())
+          )
+        : availableConstituencies;
+        
+      setFilteredConstituencies(filtered);
+    }, 150);
     
-    // Filter constituencies based on search term
-    const filtered = searchTerm 
-      ? regionConstituencies.filter(constituency => 
-          constituency.name.toLowerCase().includes(searchTerm.toLowerCase())
-        )
-      : regionConstituencies;
-      
-    setFilteredConstituencies(filtered);
-  }, [selectedRegion, constituencyData, searchTerm]);
-
+    return () => clearTimeout(handler);
+  }, [searchTerm, availableConstituencies]);
+  
+  // Handle search input change with debounce
+  const handleSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    setSearchTerm(e.target.value);
+  };
+  
   return (
     <Card className="p-6 mb-8">
       <h2 className="text-xl font-semibold mb-6">Constituency Details</h2>
@@ -67,7 +91,7 @@ const ConstituencyDetail: React.FC<ConstituencyDetailProps> = ({
             id="constituency-search"
             placeholder="Search constituencies..."
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            onChange={handleSearchChange}
             className="w-full md:w-64"
           />
         </div>
@@ -88,7 +112,7 @@ const ConstituencyDetail: React.FC<ConstituencyDetailProps> = ({
             >
               <XAxis type="number" />
               <YAxis type="category" dataKey="name" width={150} />
-              <Tooltip />
+              <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Bar dataKey="value" name="Registrations" fill="#82ca9d" />
             </BarChart>
@@ -107,4 +131,5 @@ const ConstituencyDetail: React.FC<ConstituencyDetailProps> = ({
   );
 };
 
-export default ConstituencyDetail;
+// Use React.memo to prevent unnecessary re-renders
+export default React.memo(ConstituencyDetail);
