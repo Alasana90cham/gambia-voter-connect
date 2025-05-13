@@ -183,6 +183,12 @@ const Statistics = () => {
     };
   };
   
+  // Handle delete success directly
+  const handleDeleteSuccess = () => {
+    // Reload data to ensure consistency
+    loadVoterData();
+  };
+  
   // Initial data loading
   useEffect(() => {
     if (isAdmin) {
@@ -370,6 +376,7 @@ const Statistics = () => {
               constituencyData={constituencyData}
               onUpdateFilters={setFilters}
               filters={filters}
+              onDeleteSuccess={handleDeleteSuccess}
             />
             
             {/* Constituency Details */}

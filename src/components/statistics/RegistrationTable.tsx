@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -66,6 +65,7 @@ interface RegistrationTableProps {
   constituencyData: {[key: string]: ChartData[]};
   onUpdateFilters: (filters: FilterState) => void;
   filters: FilterState;
+  onDeleteSuccess?: () => void; // New prop to trigger parent refresh
 }
 
 const RegistrationTable: React.FC<RegistrationTableProps> = ({
@@ -74,12 +74,19 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   regionData,
   constituencyData,
   onUpdateFilters,
-  filters
+  filters,
+  onDeleteSuccess
 }) => {
   const tableRef = useRef<HTMLDivElement>(null);
   const [constituencySearchOpen, setConstituencySearchOpen] = useState(false);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [localData, setLocalData] = useState<VoterData[]>(filteredData);
+  
+  // Update local data when filteredData changes
+  useEffect(() => {
+    setLocalData(filteredData);
+  }, [filteredData]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -146,6 +153,10 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         throw error;
       }
       
+      // Update UI immediately by removing deleted rows from local state
+      const updatedLocalData = localData.filter(voter => !selectedRows.includes(voter.id));
+      setLocalData(updatedLocalData);
+      
       toast({
         title: "Records Deleted",
         description: `${selectedRows.length} record(s) have been deleted successfully.`,
@@ -154,6 +165,11 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       
       // Reset selection
       setSelectedRows([]);
+      
+      // Notify parent component
+      if (onDeleteSuccess) {
+        onDeleteSuccess();
+      }
       
     } catch (error) {
       console.error("Error deleting records:", error);
@@ -280,12 +296,12 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }
   };
   
-  // Pagination logic
+  // Pagination logic with localData instead of filteredData
   const indexOfLastRecord = currentPage * recordsPerPage;
   const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
-  const paginatedData = filteredData.slice(indexOfFirstRecord, indexOfLastRecord);
+  const paginatedData = localData.slice(indexOfFirstRecord, indexOfLastRecord);
   
-  const totalPages = Math.ceil(filteredData.length / recordsPerPage);
+  const totalPages = Math.ceil(localData.length / recordsPerPage);
   
   // Generate page numbers for pagination
   const getPageNumbers = () => {
@@ -338,7 +354,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   // Reset selected rows when page changes or data changes
   useEffect(() => {
     setSelectedRows([]);
-  }, [currentPage, filteredData]);
+  }, [currentPage, localData]);
 
   return (
     <Card className="p-6 mb-8">
@@ -563,8 +579,8 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       
       <div className="mt-4 text-sm text-gray-600">
         <p>
-          Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, filteredData.length)} of {filteredData.length} registrations
-          {filteredData.length !== voterData.length && ` (filtered from ${voterData.length} total)`}
+          Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, localData.length)} of {localData.length} registrations
+          {localData.length !== voterData.length && ` (filtered from ${voterData.length} total)`}
         </p>
         {selectedRows.length > 0 && (
           <p className="mt-1">{selectedRows.length} record(s) selected</p>
