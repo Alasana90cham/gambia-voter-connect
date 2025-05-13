@@ -1,4 +1,3 @@
-
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -304,17 +303,49 @@ export const removeAdminUser = async (id: string): Promise<boolean> => {
     try {
       console.log("Removing admin with ID:", id);
       
+      // First attempt using RPC (stored procedure)
+      try {
+        const { error: rpcError } = await supabase.rpc('delete_admin', { admin_id: id });
+        
+        if (rpcError) {
+          console.error("RPC error deleting admin:", rpcError);
+          // Fall through to direct delete if RPC fails
+        } else {
+          console.log("Admin deleted successfully via RPC");
+          
+          // Invalidate admin cache after modifying data
+          adminCache.invalidate();
+          
+          return true;
+        }
+      } catch (rpcError) {
+        console.error("Exception in RPC delete:", rpcError);
+        // Fall through to direct delete
+      }
+      
+      // Fallback to direct delete if RPC fails
       const { error } = await supabase
         .from('admins')
         .delete()
         .eq('id', id);
         
       if (error) {
-        console.error("Error deleting admin:", error);
+        console.error("Error directly deleting admin:", error);
         throw error;
       }
       
-      console.log("Admin deleted successfully");
+      console.log("Admin deleted successfully via direct delete");
+      
+      // Verify the admin was actually deleted
+      const { data: checkData } = await supabase
+        .from('admins')
+        .select('id')
+        .eq('id', id);
+        
+      if (checkData && checkData.length > 0) {
+        console.error("Admin still exists after deletion attempt");
+        throw new Error("Failed to delete admin");
+      }
       
       // Invalidate admin cache after modifying data
       adminCache.invalidate();

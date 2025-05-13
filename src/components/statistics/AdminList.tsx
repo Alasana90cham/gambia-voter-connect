@@ -5,6 +5,8 @@ import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@
 import { Trash2 } from 'lucide-react';
 import { UserRole } from '@/types/form';
 import { deleteAdmin } from '@/utils/adminOperations';
+import { toast } from "@/components/ui/use-toast";
+import { supabase } from '@/integrations/supabase/client';
 
 interface AdminListProps {
   adminList: UserRole[];
@@ -14,11 +16,34 @@ interface AdminListProps {
 const AdminList: React.FC<AdminListProps> = ({ adminList, onAdminDeleted }) => {
   const handleDeleteAdmin = async (id: string) => {
     try {
+      // First attempt to delete using the utility function that calls RPC
       await deleteAdmin(id, adminList.length);
+      
+      // Fallback: Directly delete from the database if needed
+      const { error } = await supabase
+        .from('admins')
+        .delete()
+        .eq('id', id);
+        
+      if (error) {
+        console.error("Direct deletion error:", error);
+        throw error;
+      }
+      
+      // Notify parent component to refresh the admin list
       onAdminDeleted();
+      
+      toast({
+        title: "Admin Deleted",
+        description: "Admin user has been successfully removed",
+      });
     } catch (error) {
-      // Error already handled with toast in the utility function
       console.error("Error during admin deletion:", error);
+      toast({
+        title: "Deletion Failed",
+        description: "There was an error deleting the admin. Please try again.",
+        variant: "destructive",
+      });
     }
   };
 

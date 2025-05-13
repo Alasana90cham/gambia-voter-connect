@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { fetchAdmins, fetchVoterData } from '@/data/constituencies';
 import { toast } from "@/components/ui/use-toast";
@@ -259,12 +258,36 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     };
   };
 
-  // Handle delete success function
-  const handleDeleteSuccess = () => {
-    // Reload data to ensure consistency
-    loadVoterData();
+  // Handle delete success function with improved data refresh
+  const handleDeleteSuccess = async () => {
+    console.log("Delete operation completed, refreshing data");
+    // Force a complete reload of data to ensure sync with database
+    try {
+      // Clear caches if applicable
+      const voters = await fetchVoterData();
+      console.log("Refreshed voter data after deletion:", voters?.length || 0, "records");
+      setVoterData(voters || []);
+      setFilteredData(voters || []);
+      processChartData(voters || []);
+      
+      const admins = await fetchAdmins();
+      console.log("Refreshed admin data after deletion:", admins?.length || 0, "records");
+      setAdminList(admins || []);
+      
+      toast({
+        title: "Data Refreshed",
+        description: "The latest data has been loaded from the database",
+      });
+    } catch (error) {
+      console.error("Error refreshing data after deletion:", error);
+      toast({
+        title: "Refresh Failed",
+        description: "Unable to refresh data. Please reload the page.",
+        variant: "destructive",
+      });
+    }
   };
-
+  
   // Export functionality
   const handleExcelExport = () => {
     // Create a CSV string with the filtered data

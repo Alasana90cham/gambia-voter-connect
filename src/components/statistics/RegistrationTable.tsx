@@ -131,7 +131,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       setIsDeleting(true);
       console.log("Deleting voter IDs:", selectedRows);
       
-      // Delete voters from Supabase
+      // Delete voters from Supabase with improved error handling
       const { error } = await supabase
         .from('voters')
         .delete()
@@ -140,6 +140,17 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       if (error) {
         console.error("Error from Supabase:", error);
         throw error;
+      }
+      
+      // Verify deletion was successful by attempting to fetch the deleted records
+      const { data: checkData } = await supabase
+        .from('voters')
+        .select('id')
+        .in('id', selectedRows);
+        
+      if (checkData && checkData.length > 0) {
+        console.warn("Some records may not have been deleted:", checkData);
+        throw new Error("Some records were not deleted properly");
       }
       
       // Update UI immediately by removing deleted rows from local state
@@ -164,7 +175,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       console.error("Error deleting records:", error);
       toast({
         title: "Deletion Failed",
-        description: "There was an error deleting the selected records.",
+        description: "There was an error deleting the selected records. Please try again.",
         variant: "destructive",
       });
     } finally {
