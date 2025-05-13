@@ -1,4 +1,3 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -77,8 +76,9 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     setLocalData(filteredData);
   }, [filteredData]);
   
-  // Pagination state
+  // Improved pagination state with more feedback
   const [currentPage, setCurrentPage] = useState(1);
+  const [isPageChanging, setIsPageChanging] = useState(false);
   const recordsPerPage = 100;
   
   const handleFilterChange = (field: keyof FilterState, value: string) => {
@@ -278,14 +278,27 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }
   };
   
-  // Pagination logic using localData instead of filteredData for immediate UI updates
+  // Enhanced pagination logic with animation feedback
   const indexOfLastRecord = currentPage * recordsPerPage;
   const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
   const paginatedData = localData.slice(indexOfFirstRecord, indexOfLastRecord);
   
   const totalPages = Math.ceil(localData.length / recordsPerPage);
   
-  // Generate page numbers for pagination
+  // Improved page change handler with animation
+  const changePage = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
+    
+    setIsPageChanging(true);
+    setCurrentPage(newPage);
+    
+    // Add slight delay for visual feedback
+    setTimeout(() => {
+      setIsPageChanging(false);
+    }, 300);
+  };
+  
+  // Generate page numbers for pagination with enhanced visibility
   const getPageNumbers = () => {
     const pages = [];
     const maxDisplayedPages = 5;
@@ -337,6 +350,46 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   useEffect(() => {
     setSelectedRows([]);
   }, [currentPage, localData]);
+  
+  // Set up real-time subscription for deleted rows
+  useEffect(() => {
+    console.log("Setting up real-time subscription for voter delete events");
+    
+    const channel = supabase
+      .channel('voter-delete-events')
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'voters'
+      }, (payload) => {
+        console.log("Received real-time DELETE event:", payload);
+        
+        // Update local data immediately when a delete happens elsewhere
+        if (payload.old && payload.old.id) {
+          setLocalData(prev => prev.filter(voter => voter.id !== payload.old.id));
+        }
+      })
+      .subscribe((status) => {
+        console.log("Voter delete subscription status:", status);
+        if (status === 'CHANNEL_ERROR') {
+          console.error("Error with delete event subscription");
+          toast({
+            title: "Sync Error",
+            description: "Realtime updates for deletions may not work. Please refresh if you see inconsistencies.",
+            variant: "destructive",
+          });
+        }
+      });
+      
+    return () => {
+      console.log("Cleaning up delete events subscription");
+      try {
+        supabase.removeChannel(channel);
+      } catch (error) {
+        console.error("Error removing delete events channel:", error);
+      }
+    };
+  }, []);
 
   return (
     <Card className="p-6 mb-8">
@@ -369,7 +422,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         </div>
       </div>
       
-      <div className="overflow-x-auto" ref={tableRef}>
+      <div className={`overflow-x-auto transition-opacity duration-300 ${isPageChanging ? 'opacity-70' : 'opacity-100'}`} ref={tableRef}>
         <Table>
           <TableHeader>
             <TableRow>
@@ -501,13 +554,13 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         </Table>
       </div>
       
-      {/* Pagination controls */}
+      {/* Enhanced pagination controls with better state feedback */}
       {totalPages > 1 && (
         <Pagination className="mt-4">
           <PaginationContent>
             <PaginationItem>
               <PaginationPrevious 
-                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                onClick={() => changePage(currentPage - 1)}
                 className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
               />
             </PaginationItem>
@@ -521,8 +574,11 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                 <PaginationItem key={pageNumber}>
                   <PaginationLink
                     isActive={currentPage === pageNumber}
-                    onClick={() => setCurrentPage(pageNumber as number)}
-                    className="cursor-pointer"
+                    onClick={() => changePage(pageNumber as number)}
+                    className={`cursor-pointer transition-all ${
+                      isPageChanging ? 'bg-opacity-70' : ''
+                    }`}
+                    aria-current={currentPage === pageNumber ? 'page' : undefined}
                   >
                     {pageNumber}
                   </PaginationLink>
@@ -532,7 +588,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
             
             <PaginationItem>
               <PaginationNext 
-                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                onClick={() => changePage(currentPage + 1)}
                 className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
               />
             </PaginationItem>

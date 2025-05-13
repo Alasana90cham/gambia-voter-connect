@@ -176,9 +176,9 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   };
 
-  // Enhanced realtime subscription setup with better error handling
+  // Enhanced realtime subscription setup with better error handling and logging
   const setupRealtimeSubscriptions = () => {
-    console.log("Setting up realtime subscriptions");
+    console.log("Setting up realtime subscriptions with enhanced error handling");
     
     // Create a channel for admins table with improved logging
     const adminsChannel = supabase
@@ -194,6 +194,20 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       })
       .subscribe((status) => {
         console.log('Admins subscription status:', status);
+        if (status === 'TIMED_OUT') {
+          console.error('Admins subscription timed out, retrying...');
+          // Attempt to reconnect after timeout
+          setTimeout(() => {
+            setupRealtimeSubscriptions();
+          }, 5000);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Admin channel error occurred');
+          toast({
+            title: "Connection Issue",
+            description: "Realtime updates for admin data unavailable. Please refresh.",
+            variant: "destructive",
+          });
+        }
       });
     
     // Create a channel for voters table with improved logging
@@ -210,12 +224,38 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       })
       .subscribe((status) => {
         console.log('Voters subscription status:', status);
+        if (status === 'TIMED_OUT') {
+          console.error('Voters subscription timed out, retrying...');
+          // Attempt to reconnect after timeout
+          setTimeout(() => {
+            setupRealtimeSubscriptions();
+          }, 5000);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Voters channel error occurred');
+          toast({
+            title: "Connection Issue",
+            description: "Realtime updates for registration data unavailable. Please refresh.",
+            variant: "destructive",
+          });
+        }
       });
       
     return () => {
+      // Improved cleanup function with logging
       console.log("Cleaning up realtime subscriptions");
-      supabase.removeChannel(adminsChannel);
-      supabase.removeChannel(votersChannel);
+      try {
+        supabase.removeChannel(adminsChannel);
+        console.log("Admins subscription status:", adminsChannel.state);
+      } catch (error) {
+        console.error("Error removing admins channel:", error);
+      }
+      
+      try {
+        supabase.removeChannel(votersChannel);
+        console.log("Voters subscription status:", votersChannel.state);
+      } catch (error) {
+        console.error("Error removing voters channel:", error);
+      }
     };
   };
 
@@ -265,7 +305,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     loadVoterData();
     loadAdmins();
     
-    // Set up realtime subscriptions
+    // Set up realtime subscriptions with enhanced error handling
     const unsubscribe = setupRealtimeSubscriptions();
     
     return () => {
