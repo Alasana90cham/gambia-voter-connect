@@ -21,8 +21,13 @@ self.addEventListener('install', event => {
 
 // Network-first strategy with cache fallback
 self.addEventListener('fetch', event => {
-  // Skip chrome-extension requests and other non-HTTP/HTTPS requests
+  // Skip non-HTTP/HTTPS requests
   if (!event.request.url.startsWith('http')) {
+    return;
+  }
+
+  // Skip chrome-extension requests completely
+  if (event.request.url.startsWith('chrome-extension:')) {
     return;
   }
 
@@ -35,7 +40,11 @@ self.addEventListener('fetch', event => {
           const responseClone = response.clone();
           caches.open(CACHE_NAME).then(cache => {
             try {
-              cache.put(event.request, responseClone);
+              // Check for valid schemes before caching
+              const url = new URL(event.request.url);
+              if (url.protocol === 'http:' || url.protocol === 'https:') {
+                cache.put(event.request, responseClone);
+              }
             } catch (err) {
               console.error('Cache put error:', err);
             }
