@@ -328,6 +328,16 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   
   const pageNumbers = getPageNumbers();
 
+  // Reset to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [filters]);
+  
+  // Reset selected rows when page changes or data changes
+  useEffect(() => {
+    setSelectedRows([]);
+  }, [currentPage, filteredData]);
+
   return (
     <Card className="p-6 mb-8">
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
