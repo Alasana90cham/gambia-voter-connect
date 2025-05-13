@@ -136,7 +136,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       const { error } = await supabase
         .from('voters')
         .delete()
-        .in('id', selectedRows as any);
+        .in('id', selectedRows);
       
       if (error) {
         console.error("Error from Supabase:", error);
