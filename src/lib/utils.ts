@@ -6,12 +6,12 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-// Debounce function to limit how often a function can be called
+// Debounce function to limit how often a function can be called - Fixed return type
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   wait: number
 ): {
-  (...args: Parameters<T>): ReturnType<T> | undefined;
+  (...args: Parameters<T>): void; // Changed return type to void instead of ReturnType<T>
   cancel: () => void;
 } {
   let timeout: ReturnType<typeof setTimeout> | undefined;
@@ -87,4 +87,3 @@ export function throttle<T extends (...args: any[]) => any>(
 export function uniqueId(prefix = ''): string {
   return `${prefix}${Math.random().toString(36).substring(2, 11)}`;
 }
-

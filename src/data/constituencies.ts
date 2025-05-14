@@ -1,4 +1,3 @@
-
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -130,7 +129,7 @@ class DataCache<T> {
 const voterDataCache = new DataCache<any[]>(60000); // 1 minute cache for voter data
 const adminCache = new DataCache<UserRole[]>(300000); // 5 minutes cache for admin data
 
-// Add retries and backoff strategy for network requests
+// Enhanced error handling with retry logic and exponential backoff
 const fetchWithRetry = async <T>(
   fetcher: () => Promise<T>, 
   retries = 3, 
@@ -287,8 +286,8 @@ export const addAdminUser = async (id: string, email: string, password: string):
       // Invalidate admin cache after modifying data
       adminCache.invalidate();
       
-      // Handle possible type issues by checking properties
-      if (data && typeof data === 'object') {
+      // Handle possible type issues by checking properties - Fix TS18047 errors with null checks
+      if (data) {
         return {
           id: data.id || id,
           email: data.email || email,

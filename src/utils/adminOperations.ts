@@ -59,7 +59,8 @@ export const checkExistingAdmin = async (email: string, id: string) => {
   }
   
   if (existingAdmin) {
-    const emailMatches = existingAdmin.email === email;
+    // Fix TS2339 error by checking if email property exists
+    const emailMatches = existingAdmin && 'email' in existingAdmin ? existingAdmin.email === email : false;
     toast({
       title: "Admin Already Exists",
       description: emailMatches 

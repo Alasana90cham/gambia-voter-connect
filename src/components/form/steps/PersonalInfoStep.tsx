@@ -42,11 +42,11 @@ const PersonalInfoStep: React.FC<PersonalInfoStepProps> = ({ formData, updateFor
         throw new Error("Please enter a valid email address");
       }
       
-      // Check if email already exists in database
+      // Check if email already exists in database - Fix TS2345 error by using a type-safe comparison
       const { data, error } = await supabase
         .from('voters')
         .select('email')
-        .eq('email', formData.email as string)
+        .eq('email', formData.email)
         .maybeSingle();
       
       if (error) {

@@ -1,4 +1,3 @@
-
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
@@ -31,9 +30,8 @@ const queryClient = new QueryClient({
       refetchOnMount: true,
       refetchOnReconnect: 'always',
       retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
-      // Added support for large datasets
+      // Removed keepPreviousData as it's not supported in the current version
       structuralSharing: false, // Disable structural sharing for large objects
-      keepPreviousData: true, // Keep previous data while fetching new data
     },
     mutations: {
       networkMode: 'online',
