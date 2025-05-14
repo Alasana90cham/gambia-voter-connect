@@ -10,21 +10,11 @@ import {
   generateCsvContent, 
   downloadCsv 
 } from './RegistrationTableHelpers';
+import { FilterState } from './RegistrationTableProps';
 
-interface ChartData {
+export interface ChartData {
   name: string;
   value: number;
-}
-
-interface FilterState {
-  fullName: string;
-  organization: string;
-  dateOfBirth: string;
-  gender: string;
-  region: string;
-  constituency: string;
-  identificationType: string;
-  identificationNumber: string;
 }
 
 interface StatisticsContextType {
