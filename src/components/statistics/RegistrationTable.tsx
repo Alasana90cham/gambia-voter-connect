@@ -1,8 +1,7 @@
-
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
-import { Filter, Download, Printer } from 'lucide-react';
+import { Filter, Download, Printer, ListOrdered } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { toast } from "@/components/ui/use-toast";
@@ -160,14 +159,15 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     return allConstituencies;
   };
   
+  // Updated export function to include row numbers
   const handleExcelExport = () => {
     // Create a CSV string with the filtered data
-    const headers = "Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
+    const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
     let csvContent = headers;
     
     // Add the filtered data rows with full information (no redaction for admins)
-    filteredData.forEach(voter => {
-      csvContent += formatForExport(voter) + "\n";
+    filteredData.forEach((voter, index) => {
+      csvContent += `${index + 1},${formatForExport(voter)}\n`;
     });
     
     // Create a blob and trigger download
@@ -187,6 +187,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     });
   };
 
+  // Updated print function to include row numbers
   const handlePrint = () => {
     if (tableRef.current) {
       const printWindow = window.open('', '_blank');
@@ -202,8 +203,9 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         printWindow.document.write('<h3>Exported on ' + new Date().toLocaleDateString() + '</h3>');
         printWindow.document.write('<table>');
         
-        // Table headers
+        // Table headers with row number
         printWindow.document.write('<tr>');
+        printWindow.document.write('<th>No.</th>');
         printWindow.document.write('<th>Full Name</th>');
         printWindow.document.write('<th>Email</th>'); // Now including email for admin print
         printWindow.document.write('<th>Organization</th>');
@@ -216,13 +218,14 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         printWindow.document.write('</tr>');
         
         // Table data with full information (no masking for admins)
-        filteredData.forEach(voter => {
+        filteredData.forEach((voter, index) => {
           const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
           const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
                         voter.identification_type === 'identification_document' ? 'ID Document' :
                         voter.identification_type === 'passport_number' ? 'Passport' : '';
           
           printWindow.document.write('<tr>');
+          printWindow.document.write(`<td>${index + 1}</td>`); // Row number
           printWindow.document.write(`<td>${voter.full_name}</td>`);
           printWindow.document.write(`<td>${voter.email}</td>`); // Show full email
           printWindow.document.write(`<td>${voter.organization}</td>`);
@@ -332,8 +335,8 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     );
   };
 
-  // Updated VoterRow component - with no selection checkbox
-  const VoterRow = ({ voter }) => {
+  // Updated VoterRow component - with row number
+  const VoterRow = ({ voter, index }) => {
     const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
     const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
                   voter.identification_type === 'identification_document' ? 'ID Document' :
@@ -341,6 +344,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     
     return (
       <TableRow key={voter.id}>
+        <TableCell className="font-medium text-center">{indexOfFirstRecord + index + 1}</TableCell>
         <TableCell>{voter.full_name}</TableCell>
         <TableCell>{voter.organization}</TableCell>
         <TableCell>{dob}</TableCell>
@@ -381,6 +385,14 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-16 text-center">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-center">
+                    <ListOrdered size={16} className="mr-1" />
+                    No.
+                  </div>
+                </div>
+              </TableHead>
               <TableHead>
                 <div className="space-y-1">
                   <div>Full Name</div>
@@ -489,10 +501,11 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
             {paginatedData.length === 0 ? (
               <NoDataRow />
             ) : (
-              paginatedData.map((voter) => (
+              paginatedData.map((voter, index) => (
                 <VoterRow 
                   key={voter.id} 
                   voter={voter}
+                  index={index}
                 />
               ))
             )}
