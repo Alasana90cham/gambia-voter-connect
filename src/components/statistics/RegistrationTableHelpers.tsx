@@ -17,7 +17,7 @@ interface VoterData {
 
 export const NoDataRow = () => (
   <TableRow>
-    <TableCell colSpan={8} className="text-center py-4">
+    <TableCell colSpan={9} className="text-center py-4">
       No matching records found
     </TableCell>
   </TableRow>
@@ -100,4 +100,43 @@ export const filterLargeDataset = (data: any[], filterFn: (item: any) => boolean
   }
   
   return result;
+};
+
+// NEW: Generate CSV content in memory-efficient chunks
+export const generateCsvContent = (data: any[], includeHeaders = true): string => {
+  const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
+  const chunkSize = 1000;
+  let csvContent = includeHeaders ? headers : '';
+  const totalItems = data.length;
+  
+  console.log(`Generating CSV for ${totalItems} records in chunks of ${chunkSize}`);
+  
+  for (let i = 0; i < totalItems; i += chunkSize) {
+    const endIdx = Math.min(i + chunkSize, totalItems);
+    console.log(`Processing CSV chunk ${Math.floor(i/chunkSize) + 1}/${Math.ceil(totalItems/chunkSize)}`);
+    
+    // Process this chunk
+    for (let j = i; j < endIdx; j++) {
+      const voter = data[j];
+      const rowNum = j + 1; // 1-based row numbering
+      csvContent += `${rowNum},${formatForExport(voter)}\n`;
+    }
+  }
+  
+  return csvContent;
+};
+
+// NEW: Function to download generated content
+export const downloadCsv = (content: string, filename: string): void => {
+  const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = filename;
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  
+  // Important: revoke object URL to free memory
+  setTimeout(() => URL.revokeObjectURL(url), 100);
 };

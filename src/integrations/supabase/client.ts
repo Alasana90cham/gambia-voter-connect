@@ -41,8 +41,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
       'X-Client-Info': 'supabase-js/2.x'
     },
     fetch: (url, options) => {
-      // Increased timeout to 5 minutes for very large dataset operations
-      const timeout = 300000; 
+      // Increased timeout to 10 minutes for very large dataset operations
+      const timeout = 600000; 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
       
@@ -66,7 +66,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 let failedRequests = 0;
 const maxRetries = 5;
 const connectionPool = new Set();
-const maxPoolSize = 100; // Increased from 50 to 100
+const maxPoolSize = 100;
 
 // Simplified handleRequestWithRetry function to avoid excessive type instantiation
 const handleRequestWithRetry = async (requestFn) => {
@@ -155,7 +155,7 @@ export const batchOperation = async (items, operationFn, batchSize = 500) => {
   return results;
 };
 
-// Optimized fetchPaginated function with NO size limits for truly unlimited data access
+// FIXED: Completely redesigned fetchPaginated function with NO record limits whatsoever
 export const fetchPaginated = async <T>(
   tableName: 'admins' | 'voters',
   options: {
@@ -163,23 +163,29 @@ export const fetchPaginated = async <T>(
     orderBy?: string;
     ascending?: boolean;
   } = {}, 
-  // Use a much larger page size to reduce number of requests
-  pageSize = 20000
+  // Using a MASSIVE page size to reduce number of requests
+  pageSize = 50000
 ): Promise<T[]> => {
   const { filters = {}, orderBy = 'created_at', ascending = true } = options;
   let page = 0;
   let hasMore = true;
   const allResults: T[] = [];
   
-  // Much higher maxPages to support virtually unlimited datasets
-  const maxPages = 10000;
+  // Virtually unlimited max pages
+  const maxPages = 1000000;
   
-  console.log(`Starting unlimited paginated fetch for ${tableName}`);
+  console.log(`Starting UNLIMITED paginated fetch for ${tableName} with NO record limit`);
 
   try {
+    // Force a minimal delay between requests to avoid rate limiting
+    const delayBetweenRequests = async () => {
+      await new Promise(resolve => setTimeout(resolve, 50));
+    };
+
     while (hasMore && page < maxPages) {
       const start = page * pageSize;
       
+      // Create a fresh query for each page to avoid query builder state issues
       let query = supabase.from(tableName).select('*', { count: 'exact' });
       
       // Add ordering
@@ -191,7 +197,7 @@ export const fetchPaginated = async <T>(
       // Apply filters
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
-          // @ts-ignore - Ignore the typing here
+          // @ts-ignore - Ignore the typing here for simplicity
           query = query.eq(key, value);
         }
       });
@@ -209,11 +215,18 @@ export const fetchPaginated = async <T>(
         allResults.push(...data as T[]);
         
         // Check if we've reached the total count
-        if (typeof count === 'number' && allResults.length >= count) {
-          console.log(`Fetched all ${count} records in ${page + 1} pages`);
-          hasMore = false;
-          break;
+        if (typeof count === 'number') {
+          console.log(`Progress: ${allResults.length}/${count} total records (${Math.round((allResults.length / count) * 100)}%)`);
+          
+          if (allResults.length >= count) {
+            console.log(`Fetched all ${count} records in ${page + 1} pages`);
+            hasMore = false;
+            break;
+          }
         }
+        
+        // Add small delay between requests to avoid overloading the server
+        await delayBetweenRequests();
       } else {
         console.log(`No data received for page ${page + 1}, stopping pagination`);
         hasMore = false;

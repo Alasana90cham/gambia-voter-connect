@@ -36,7 +36,6 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
   } = useStatistics();
 
   // Ensure we use the actual length from voterData for accurate total count
-  // This prevents the 1000-record limitation issue
   const totalVoters = useMemo(() => voterData.length, [voterData]);
   
   // Calculate actual filtered count for accurate display
@@ -52,6 +51,11 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
     Math.min(startRecord + pageSize - 1, totalRecords),
     [startRecord, pageSize, totalRecords]
   );
+  
+  // Format the current date and time
+  const lastUpdated = useMemo(() => {
+    return new Date().toLocaleString();
+  }, []);
 
   return (
     <main className="flex-grow container mx-auto px-4 py-8">
@@ -88,14 +92,31 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
           Welcome to the admin dashboard. Here you can view real-time statistics of voter registrations.
         </p>
         
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4 mt-4">
+          <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
+            <h3 className="font-medium text-gray-500">Total Regions</h3>
+            <p className="text-2xl font-bold mt-1">{regionData.length}</p>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
+            <h3 className="font-medium text-gray-500">Total Registrations</h3>
+            <p className="text-2xl font-bold mt-1">{totalVoters.toLocaleString()}</p>
+          </div>
+          
+          <div className="bg-white rounded-lg shadow p-4 border border-gray-200">
+            <h3 className="font-medium text-gray-500">Last updated</h3>
+            <p className="text-md font-medium mt-1">{lastUpdated}</p>
+          </div>
+        </div>
+        
         {totalRecords > 0 && (
-          <div className="mt-2 text-sm text-gray-500">
+          <div className="mt-4 text-sm text-gray-500">
             {isLoading ? (
               <span>Loading data...</span>
             ) : (
               <span>
-                Showing {startRecord} to {endRecord} of {totalRecords} records
-                {totalRecords !== totalVoters && ` (filtered from ${totalVoters} total records)`}
+                Showing {startRecord.toLocaleString()} to {endRecord.toLocaleString()} of {totalRecords.toLocaleString()} records
+                {totalRecords !== totalVoters && ` (filtered from ${totalVoters.toLocaleString()} total records)`}
               </span>
             )}
           </div>
