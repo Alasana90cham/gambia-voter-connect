@@ -344,7 +344,7 @@ export const fetchPaginated = async <T>(
       // Apply filters
       Object.entries(filters).forEach(([key, value]) => {
         if (value !== undefined && value !== null && value !== '') {
-          // @ts-ignore - Safely applying dynamic filters
+          // @ts-ignore
           query = query.eq(key, value);
         }
       });
@@ -424,7 +424,7 @@ export const fetchPaginated = async <T>(
         // Add filters if any
         Object.entries(filters).forEach(([key, value]) => {
           if (value !== undefined && value !== null && value !== '') {
-            // @ts-ignore - Safely applying dynamic filters
+            // @ts-ignore
             directQuery = directQuery.eq(key, value);
           }
         });
