@@ -9,14 +9,20 @@ const SUPABASE_PUBLISHABLE_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiO
 // Import the supabase client like this:
 // import { supabase } from "@/integrations/supabase/client";
 
-// Define types for our RPC functions
+// Define types for our RPC functions with simplified typing to avoid excessive depth
+interface RPCResponse<T = any> {
+  data: T;
+  error: Error | null;
+}
+
+// Extend SupabaseClient with simplified typing
 declare module '@supabase/supabase-js' {
   interface SupabaseClient<Database> {
-    rpc<ResponseType = any>(
+    rpc(
       fn: 'admin_login' | 'create_admin' | 'delete_admin' | 'add_initial_admins',
       params?: object,
       options?: object
-    ): { data: ResponseType; error: Error | null };
+    ): RPCResponse;
   }
 }
 
@@ -153,7 +159,7 @@ export const batchOperation = async (items, operationFn, batchSize = 100) => {
   return results;
 };
 
-// Add function for paginated fetches to handle large datasets with proper typing
+// Add function for paginated fetches to handle large datasets
 export const fetchPaginated = async <T>(
   tableName: 'admins' | 'voters',
   options: {
@@ -161,7 +167,7 @@ export const fetchPaginated = async <T>(
     orderBy?: string;
     ascending?: boolean;
   } = {}, 
-  pageSize = 500
+  pageSize = 1000
 ): Promise<T[]> => {
   const { filters = {}, orderBy = 'created_at', ascending = true } = options;
   let page = 0;
@@ -171,15 +177,19 @@ export const fetchPaginated = async <T>(
   while (hasMore) {
     const start = page * pageSize;
     
-    let query = supabase
-      .from(tableName)
-      .select('*', { count: 'exact' })
-      .order(orderBy, { ascending })
-      .range(start, start + pageSize - 1);
+    // Using a simpler approach to avoid excessive type instantiation
+    let query = supabase.from(tableName).select('*', { count: 'exact' });
     
-    // Apply any filters
+    // Add ordering
+    query = query.order(orderBy, { ascending });
+    
+    // Add range
+    query = query.range(start, start + pageSize - 1);
+    
+    // Apply filters manually to avoid the type depth issue
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
+        // @ts-ignore - Ignore the typing here to prevent depth error
         query = query.eq(key, value);
       }
     });
