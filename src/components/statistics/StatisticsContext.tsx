@@ -1,8 +1,9 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
 import { fetchAdmins, fetchVoterData } from '@/data/constituencies';
 import { toast } from "@/components/ui/use-toast";
 import { UserRole } from "@/types/form";
-import { supabase, fetchPaginated } from "@/integrations/supabase/client";
+import { supabase, fetchPaginated, TableName } from "@/integrations/supabase/client";
 import { debounce } from "@/lib/utils";
 import { 
   getVisibleRows, 
@@ -58,14 +59,13 @@ export const useStatistics = () => {
 };
 
 export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
+  // State declarations - group all useState calls together
   const [selectedRegion, setSelectedRegion] = useState('Banjul');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [totalPages, setTotalPages] = useState(1);
   const [totalRecords, setTotalRecords] = useState(0);
-  
-  // Filters state with memoization
-  const [filters, setFilters] = useState({
+  const [filters, setFilters] = useState<FilterState>({
     fullName: '',
     organization: '',
     dateOfBirth: '',
@@ -75,26 +75,16 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     identificationType: '',
     identificationNumber: ''
   });
-  
-  // Voter data state
   const [voterData, setVoterData] = useState<any[]>([]);
   const [filteredData, setFilteredData] = useState<any[]>([]);
-  
-  // Admin users state
   const [adminList, setAdminList] = useState<UserRole[]>([]);
-  
-  // Chart data state with memoization
   const [genderData, setGenderData] = useState<ChartData[]>([]);
   const [regionData, setRegionData] = useState<ChartData[]>([]);
   const [constituencyData, setConstituencyData] = useState<{[key: string]: ChartData[]}>({});
-  
-  // Loading states
   const [isLoading, setIsLoading] = useState(false);
-  
-  // Last fetch timestamp and update count
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
-
+  
   // Process data for charts with optimization for large datasets
   const processChartData = useCallback((voters: any[]) => {
     if (!voters || voters.length === 0) return;
@@ -154,7 +144,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     console.log("Chart data processing completed successfully");
   }, []);
 
-  // ULTRA-RELIABLE: Complete overhaul of voter data fetching with multiple fallback strategies
+  // Load voter data with error handling
   const loadVoterData = useCallback(async () => {
     setIsLoading(true);
     
@@ -296,7 +286,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, []);
 
-  // Enhanced realtime subscription setup to detect new registrations
+  // Setup realtime subscriptions
   const setupRealtimeSubscriptions = useCallback(() => {
     console.log("Setting up realtime subscriptions for unlimited data");
     
@@ -346,7 +336,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     };
   }, [loadVoterData, loadAdmins]);
 
-  // Improved delete success handler with forced complete reload
+  // Delete success handler
   const handleDeleteSuccess = useCallback(async () => {
     console.log("Delete operation completed, performing full data refresh");
     setIsLoading(true);
@@ -371,9 +361,9 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, [loadVoterData]);
+  }, [loadVoterData, loadAdmins]);
   
-  // ULTRA-RELIABLE CSV export functionality guaranteed to work with ANY data size
+  // CSV export functionality
   const handleExcelExport = useCallback(() => {
     setIsLoading(true);
     toast({
@@ -411,39 +401,22 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }, 100); // Small delay to allow toast to render first
   }, [filteredData]);
   
-  // Initial data loading with better error handling
-  useEffect(() => {
-    console.log("Admin authenticated, loading data");
+  // Helper function to update state after filtering
+  const updateFilterResults = useCallback((result: any[]) => {
+    console.log(`Updating filtered results: ${result.length} records after filtering`);
+    setFilteredData(result);
+    setTotalRecords(result.length);
+    setTotalPages(Math.ceil(result.length / pageSize));
+    setCurrentPage(1); // Reset to first page when filters change
+    setIsLoading(false);
     
-    const initializeData = async () => {
-      try {
-        // Force a refresh of database connection
-        try {
-          await supabase.auth.refreshSession();
-        } catch (refreshError) {
-          console.log("Session refresh not needed or failed:", refreshError);
-        }
-        
-        // Load initial data in parallel
-        await Promise.all([loadVoterData(), loadAdmins()]);
-      } catch (error) {
-        console.error("Error during initial data loading:", error);
-      }
-    };
-    
-    initializeData();
-    
-    // Set up realtime subscriptions with enhanced error handling
-    const unsubscribe = setupRealtimeSubscriptions();
-    
-    return () => {
-      unsubscribe();
-    };
-  }, [loadVoterData, loadAdmins, setupRealtimeSubscriptions]);
-
-  // Debounced filter application with improved performance for large datasets
-  const debouncedApplyFilters = useCallback(
-    debounce(() => {
+    // Also update chart data based on filtered results
+    processChartData(result);
+  }, [pageSize, processChartData]);
+  
+  // Create the debounced filter function
+  const debouncedApplyFilters = useMemo(
+    () => debounce(() => {
       if (!voterData.length) return;
       
       console.log("Applying filters to", voterData.length, "records");
@@ -556,53 +529,96 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         }
       }, 0);
     }, 300),
-    [voterData, pageSize]
+    [voterData, filters, updateFilterResults]
   );
-  
-  // Helper function to update state after filtering with improved logging
-  const updateFilterResults = useCallback((result: any[]) => {
-    console.log(`Updating filtered results: ${result.length} records after filtering`);
-    setFilteredData(result);
-    setTotalRecords(result.length);
-    setTotalPages(Math.ceil(result.length / pageSize));
-    setCurrentPage(1); // Reset to first page when filters change
-    setIsLoading(false);
-    
-    // Also update chart data based on filtered results
-    processChartData(result);
-    
-  }, [pageSize, processChartData]);
 
   // Apply filters when filters or source data changes
   useEffect(() => {
-    debouncedApplyFilters();
-    return () => debouncedApplyFilters.cancel();
+    if (debouncedApplyFilters) {
+      debouncedApplyFilters();
+    }
+    return () => {
+      if (debouncedApplyFilters.cancel) {
+        debouncedApplyFilters.cancel();
+      }
+    };
   }, [filters, voterData, debouncedApplyFilters]);
 
+  // Initial data loading
+  useEffect(() => {
+    console.log("Admin authenticated, loading data");
+    
+    const initializeData = async () => {
+      try {
+        // Force a refresh of database connection
+        try {
+          await supabase.auth.refreshSession();
+        } catch (refreshError) {
+          console.log("Session refresh not needed or failed:", refreshError);
+        }
+        
+        // Load initial data in parallel
+        await Promise.all([loadVoterData(), loadAdmins()]);
+      } catch (error) {
+        console.error("Error during initial data loading:", error);
+      }
+    };
+    
+    initializeData();
+    
+    // Set up realtime subscriptions with enhanced error handling
+    const unsubscribe = setupRealtimeSubscriptions();
+    
+    return () => {
+      unsubscribe();
+    };
+  }, [loadVoterData, loadAdmins, setupRealtimeSubscriptions]);
+
+  // Create the context value object
+  const contextValue = useMemo(() => ({
+    voterData,
+    filteredData,
+    genderData,
+    regionData,
+    constituencyData,
+    adminList,
+    filters,
+    setFilters,
+    isLoading,
+    selectedRegion,
+    setSelectedRegion,
+    currentPage,
+    totalPages,
+    totalRecords,
+    pageSize,
+    setPageSize,
+    setCurrentPage,
+    handleDeleteSuccess,
+    handleExcelExport
+  }), [
+    voterData,
+    filteredData,
+    genderData,
+    regionData,
+    constituencyData,
+    adminList,
+    filters,
+    setFilters,
+    isLoading,
+    selectedRegion,
+    setSelectedRegion,
+    currentPage,
+    totalPages,
+    totalRecords,
+    pageSize,
+    setPageSize,
+    setCurrentPage,
+    handleDeleteSuccess,
+    handleExcelExport
+  ]);
+
   return (
-    <StatisticsContext.Provider
-      value={{
-        voterData,
-        filteredData,
-        genderData,
-        regionData,
-        constituencyData,
-        adminList,
-        filters,
-        setFilters,
-        isLoading,
-        selectedRegion,
-        setSelectedRegion,
-        currentPage,
-        totalPages,
-        totalRecords,
-        pageSize,
-        setPageSize,
-        setCurrentPage,
-        handleDeleteSuccess,
-        handleExcelExport
-      }}
-    >
+    <StatisticsContext.Provider value={contextValue}>
       {children}
     </StatisticsContext.Provider>
   );

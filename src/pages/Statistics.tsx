@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -21,8 +22,8 @@ const Statistics = () => {
   const [dataRefresh, setDataRefresh] = useState<number>(0);
   const { toast } = useToast();
 
-  // Reset the inactivity timer
-  const resetInactivityTimer = () => {
+  // Reset the inactivity timer - defined outside of any conditional logic to maintain hook order
+  const resetInactivityTimer = useCallback(() => {
     // Clear existing timer if any
     if (inactivityTimer) {
       clearTimeout(inactivityTimer);
@@ -38,7 +39,62 @@ const Statistics = () => {
     }, SESSION_TIMEOUT);
     
     setInactivityTimer(timer);
-  };
+  }, [inactivityTimer]);
+
+  // Handle logout - defined early to ensure consistent hook order
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('adminSession');
+    setIsAdmin(false);
+    
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+      setInactivityTimer(null);
+    }
+    
+    toast({
+      title: "Logged Out",
+      description: "You have been logged out successfully.",
+    });
+  }, [inactivityTimer, toast]);
+
+  // Check connection status - defined early to ensure consistent hook order
+  const checkConnectionStatus = useCallback(async () => {
+    try {
+      setConnectionStatus('connecting');
+      const { error } = await supabase.from('voters').select('count').limit(1);
+      
+      if (error) {
+        console.error('Connection check failed:', error);
+        setConnectionStatus('disconnected');
+        toast({
+          title: "Connection Issue",
+          description: "Having trouble connecting to the database. Will retry automatically.",
+          variant: "destructive",
+        });
+      } else {
+        setConnectionStatus('connected');
+      }
+    } catch (e) {
+      console.error('Connection check exception:', e);
+      setConnectionStatus('disconnected');
+    }
+  }, [toast]);
+
+  // Handle data recovery - defined early to ensure consistent hook order
+  const handleDataRecovery = useCallback(() => {
+    // Increment data refresh to trigger reloads of statistics data
+    setDataRefresh(prev => prev + 1);
+    toast({
+      title: "Data Recovered",
+      description: "Statistics updated with recovered data.",
+    });
+  }, [toast]);
+
+  // Handle login success - defined early to ensure consistent hook order
+  const handleLoginSuccess = useCallback(() => {
+    setIsAdmin(true);
+    resetInactivityTimer();
+  }, [resetInactivityTimer]);
 
   // Setup event listeners for user activity
   useEffect(() => {
@@ -69,32 +125,9 @@ const Statistics = () => {
         });
       };
     }
-  }, [isAdmin]);
+  }, [isAdmin, inactivityTimer, resetInactivityTimer]);
 
   // Monitor connection status
-  const checkConnectionStatus = useCallback(async () => {
-    try {
-      setConnectionStatus('connecting');
-      const { error } = await supabase.from('voters').select('count').limit(1);
-      
-      if (error) {
-        console.error('Connection check failed:', error);
-        setConnectionStatus('disconnected');
-        toast({
-          title: "Connection Issue",
-          description: "Having trouble connecting to the database. Will retry automatically.",
-          variant: "destructive",
-        });
-      } else {
-        setConnectionStatus('connected');
-      }
-    } catch (e) {
-      console.error('Connection check exception:', e);
-      setConnectionStatus('disconnected');
-    }
-  }, [toast]);
-
-  // Periodically check connection status
   useEffect(() => {
     // Check connection immediately
     checkConnectionStatus();
@@ -212,44 +245,6 @@ const Statistics = () => {
     };
   }, [toast, checkConnectionStatus]);
 
-  const handleLoginSuccess = () => {
-    setIsAdmin(true);
-    resetInactivityTimer();
-  };
-
-  const handleLogout = () => {
-    localStorage.removeItem('adminSession');
-    setIsAdmin(false);
-    
-    if (inactivityTimer) {
-      clearTimeout(inactivityTimer);
-      setInactivityTimer(null);
-    }
-    
-    toast({
-      title: "Logged Out",
-      description: "You have been logged out successfully.",
-    });
-  };
-
-  // Show loading state while checking for existing session
-  if (isInitializing) {
-    return (
-      <div className="min-h-screen flex flex-col">
-        <Header />
-        <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
-          <div className="text-center">
-            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" role="status">
-              <span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">Loading...</span>
-            </div>
-            <p className="mt-2">Initializing secure dashboard...</p>
-          </div>
-        </main>
-        <Footer />
-      </div>
-    );
-  }
-
   // Display connection status indicator
   const ConnectionIndicator = () => (
     <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-white dark:bg-gray-800 p-2 rounded-md shadow-lg">
@@ -268,15 +263,23 @@ const Statistics = () => {
     </div>
   );
 
-  // Handle data recovery
-  const handleDataRecovery = useCallback(() => {
-    // Increment data refresh to trigger reloads of statistics data
-    setDataRefresh(prev => prev + 1);
-    toast({
-      title: "Data Recovered",
-      description: "Statistics updated with recovered data.",
-    });
-  }, [toast]);
+  // Show loading state while checking for existing session
+  if (isInitializing) {
+    return (
+      <div className="min-h-screen flex flex-col">
+        <Header />
+        <main className="flex-grow container mx-auto px-4 py-8 flex items-center justify-center">
+          <div className="text-center">
+            <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]" role="status">
+              <span className="!absolute !-m-px !h-px !w-px !overflow-hidden !whitespace-nowrap !border-0 !p-0 ![clip:rect(0,0,0,0)]">Loading...</span>
+            </div>
+            <p className="mt-2">Initializing secure dashboard...</p>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
 
   // Component rendering based on authentication state
   if (!isAdmin) {
