@@ -17,7 +17,28 @@ interface StatisticsContentProps {
 }
 
 const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
-  const { handleDeleteSuccess, selectedRegion, setSelectedRegion } = useStatistics();
+  const { 
+    handleDeleteSuccess, 
+    selectedRegion, 
+    setSelectedRegion,
+    genderData,
+    regionData,
+    constituencyData,
+    filteredData,
+    voterData,
+    currentPage,
+    pageSize,
+    setCurrentPage,
+    setPageSize,
+    totalPages,
+    totalRecords,
+    filters,
+    setFilters,
+    isLoading,
+    handleExcelExport,
+    adminList
+  } = useStatistics();
+  
   const [activeTab, setActiveTab] = useState<string>('registrations');
   
   // Handle tab change
@@ -57,13 +78,31 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
         </TabsList>
         
         <TabsContent value="registrations">
-          <RegistrationTable />
+          <RegistrationTable 
+            voterData={voterData}
+            filteredData={filteredData}
+            regionData={regionData}
+            constituencyData={constituencyData}
+            currentPage={currentPage}
+            pageSize={pageSize}
+            setCurrentPage={setCurrentPage}
+            setPageSize={setPageSize}
+            totalPages={totalPages}
+            totalRecords={totalRecords}
+            filters={filters}
+            setFilters={setFilters}
+            isLoading={isLoading}
+            handleExcelExport={handleExcelExport}
+          />
         </TabsContent>
         
         <TabsContent value="demographics">
           <div className="bg-white dark:bg-gray-800 rounded-lg border shadow-sm p-6">
             <h2 className="text-xl font-semibold mb-4">Gender Distribution</h2>
-            <GenderChart />
+            <GenderChart 
+              genderData={genderData} 
+              totalCount={filteredData.length}
+            />
           </div>
         </TabsContent>
         
@@ -71,7 +110,7 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="bg-white dark:bg-gray-800 rounded-lg border shadow-sm p-6 lg:col-span-1">
               <h2 className="text-xl font-semibold mb-4">Regional Distribution</h2>
-              <RegionChart />
+              <RegionChart regionData={regionData} />
             </div>
             <div className="bg-white dark:bg-gray-800 rounded-lg border shadow-sm p-6 lg:col-span-2">
               <h2 className="text-xl font-semibold mb-4">
@@ -90,14 +129,19 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
                   <option value="Upper River">Upper River</option>
                 </select>
               </h2>
-              <ConstituencyDetail />
+              <ConstituencyDetail 
+                selectedRegion={selectedRegion}
+                regionData={regionData}
+                constituencyData={constituencyData}
+                onRegionChange={setSelectedRegion}
+              />
             </div>
           </div>
         </TabsContent>
         
         <TabsContent value="admin">
           <AdminManagement 
-            adminList={[]} 
+            adminList={adminList || []} 
             onUpdateSuccess={handleDeleteSuccess} 
           />
         </TabsContent>
