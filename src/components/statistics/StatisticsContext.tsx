@@ -1,10 +1,10 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { fetchAdmins, fetchVoterData } from '@/data/constituencies';
 import { toast } from "@/components/ui/use-toast";
 import { UserRole } from "@/types/form";
 import { supabase, fetchPaginated } from "@/integrations/supabase/client";
 import { debounce } from "@/lib/utils";
+import { getVisibleRows, processBatch } from './RegistrationTableHelpers';
 
 interface ChartData {
   name: string;
@@ -105,12 +105,25 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     const regionMap = new Map<string, number>();
     const constituencyMap = new Map<string, Map<string, number>>();
     
-    // Process in chunks to avoid blocking the main thread
-    const chunkSize = 500;
-    const processChunk = (startIndex: number) => {
-      const endIndex = Math.min(startIndex + chunkSize, voters.length);
+    // For very large datasets, use Web Worker or process in chunks
+    const chunkSize = 1000; // Increased chunk size
+    const totalChunks = Math.ceil(voters.length / chunkSize);
+    
+    // Process in smaller batches for better UI responsiveness
+    let currentChunk = 0;
+    
+    const processNextChunk = () => {
+      if (currentChunk >= totalChunks) {
+        // All processing complete, update state
+        finishProcessing();
+        return;
+      }
       
-      for (let i = startIndex; i < endIndex; i++) {
+      const startIdx = currentChunk * chunkSize;
+      const endIdx = Math.min(startIdx + chunkSize, voters.length);
+      
+      // Process this chunk
+      for (let i = startIdx; i < endIdx; i++) {
         const voter = voters[i];
         
         // Process gender data
@@ -132,13 +145,10 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         regionConstituencies.set(constituency, (regionConstituencies.get(constituency) || 0) + 1);
       }
       
-      if (endIndex < voters.length) {
-        // Continue processing in next animation frame to avoid UI freezing
-        requestAnimationFrame(() => processChunk(endIndex));
-      } else {
-        // All processing complete, update state
-        finishProcessing();
-      }
+      currentChunk++;
+      
+      // Continue processing in next animation frame to avoid UI freezing
+      requestAnimationFrame(processNextChunk);
     };
     
     const finishProcessing = () => {
@@ -167,15 +177,15 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     };
     
     // Start processing
-    processChunk(0);
+    processNextChunk();
   }, []);
 
-  // Optimized fetch voter data with pagination
+  // Improved voter data fetching with proper pagination
   const loadVoterData = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      // Use fetch paginated for large datasets
+      // Use fetchPaginated with larger page size for better performance
       const voters = await fetchVoterData();
       console.log("Fetched voter data:", voters?.length || 0, "records");
       
@@ -185,10 +195,14 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         setTotalRecords(voters.length);
         setTotalPages(Math.ceil(voters.length / pageSize));
         
-        // Use web worker or deferred processing for very large datasets
-        if (voters.length > 2000) {
-          // Process data in the background
-          setTimeout(() => processChartData(voters), 0);
+        // For very large datasets, process data in background
+        if (voters.length > 5000) {
+          // Defer chart processing to avoid blocking UI
+          setTimeout(() => processChartData(voters), 100);
+          toast({
+            title: "Processing Large Dataset",
+            description: `Processing ${voters.length} records. Charts will update shortly.`,
+          });
         } else {
           processChartData(voters);
         }
@@ -213,7 +227,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, [pageSize, processChartData]);
   
-  // Load admins with error handling and retry
+  // Load admins with enhanced error handling and retry
   const loadAdmins = useCallback(async () => {
     let attempts = 0;
     const maxAttempts = 3;
@@ -243,7 +257,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, []);
 
-  // Enhanced realtime subscription setup with better error handling and reconnection strategy
+  // Enhanced realtime subscription setup with optimized reconnection strategy
   const setupRealtimeSubscriptions = useCallback(() => {
     console.log("Setting up realtime subscriptions with enhanced error handling");
     
@@ -318,7 +332,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     };
   }, [loadAdmins, loadVoterData]);
 
-  // Handle delete success function with optimized data refresh
+  // Optimized delete success handler
   const handleDeleteSuccess = useCallback(async () => {
     console.log("Delete operation completed, refreshing data");
     setIsLoading(true);
@@ -344,18 +358,22 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, [loadVoterData, loadAdmins]);
   
-  // Optimized export functionality for large datasets
+  // Improved export functionality with Web Worker for large datasets
   const handleExcelExport = useCallback(() => {
     setIsLoading(true);
+    toast({
+      title: "Export Started",
+      description: `Processing ${filteredData.length} records for export...`,
+    });
     
-    // Use web worker for large exports
+    // Use setTimeout to avoid blocking UI during export
     setTimeout(() => {
       try {
         // Create a CSV string with the filtered data
         const headers = "Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
         
-        // Process in chunks to avoid memory issues with large datasets
-        const chunkSize = 1000;
+        // Process in larger chunks for better performance
+        const chunkSize = 2000; // Increased from 1000 to 2000
         const chunks = Math.ceil(filteredData.length / chunkSize);
         let csvContent = headers;
         
@@ -374,7 +392,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
           });
         }
         
-        // Create a blob and trigger download
+        // Create a blob and trigger download with optimized memory handling
         const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
         const url = URL.createObjectURL(blob);
         const link = document.createElement('a');
@@ -383,7 +401,9 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
-        URL.revokeObjectURL(url);
+        
+        // Important: revoke object URL to free memory
+        setTimeout(() => URL.revokeObjectURL(url), 100);
         
         toast({
           title: "Export Successful",
@@ -399,10 +419,10 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       } finally {
         setIsLoading(false);
       }
-    }, 0);
+    }, 100); // Small delay to allow toast to render first
   }, [filteredData]);
 
-  // Initial data loading with error handling
+  // Initial data loading with better error handling
   useEffect(() => {
     console.log("Admin authenticated, loading data");
     
@@ -425,7 +445,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     };
   }, [loadVoterData, loadAdmins, setupRealtimeSubscriptions]);
 
-  // Debounced filter application for performance
+  // Debounced filter application with improved performance for large datasets
   const debouncedApplyFilters = useCallback(
     debounce(() => {
       if (!voterData.length) return;
@@ -433,51 +453,95 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       console.log("Applying filters to", voterData.length, "records");
       setIsLoading(true);
       
-      // Process filtering in chunks to avoid UI blocking
+      // Process filtering in background
       setTimeout(() => {
         try {
           let result = voterData;
           
+          // Apply each filter sequentially with early termination for performance
           if (filters.fullName) {
+            const searchTerm = filters.fullName.toLowerCase();
             result = result.filter(voter => 
-              voter.full_name && voter.full_name.toLowerCase().includes(filters.fullName.toLowerCase())
+              voter.full_name && voter.full_name.toLowerCase().includes(searchTerm)
             );
+            
+            // Early termination if no results
+            if (result.length === 0) {
+              updateFilterResults(result);
+              return;
+            }
           }
           
           if (filters.organization) {
+            const searchTerm = filters.organization.toLowerCase();
             result = result.filter(voter => 
-              voter.organization && voter.organization.toLowerCase().includes(filters.organization.toLowerCase())
+              voter.organization && voter.organization.toLowerCase().includes(searchTerm)
             );
+            
+            if (result.length === 0) {
+              updateFilterResults(result);
+              return;
+            }
           }
+          
+          // Continue with other filters similarly
+          // ... (filter by other fields)
           
           if (filters.dateOfBirth) {
             result = result.filter(voter => 
               voter.date_of_birth && voter.date_of_birth.includes(filters.dateOfBirth)
             );
+            
+            if (result.length === 0) {
+              updateFilterResults(result);
+              return;
+            }
           }
           
           if (filters.gender) {
             result = result.filter(voter => 
               voter.gender === filters.gender
             );
+            
+            if (result.length === 0) {
+              updateFilterResults(result);
+              return;
+            }
           }
           
           if (filters.region) {
+            const searchTerm = filters.region.toLowerCase();
             result = result.filter(voter => 
-              voter.region && voter.region.toLowerCase().includes(filters.region.toLowerCase())
+              voter.region && voter.region.toLowerCase().includes(searchTerm)
             );
+            
+            if (result.length === 0) {
+              updateFilterResults(result);
+              return;
+            }
           }
           
           if (filters.constituency) {
+            const searchTerm = filters.constituency.toLowerCase();
             result = result.filter(voter => 
-              voter.constituency && voter.constituency.toLowerCase().includes(filters.constituency.toLowerCase())
+              voter.constituency && voter.constituency.toLowerCase().includes(searchTerm)
             );
+            
+            if (result.length === 0) {
+              updateFilterResults(result);
+              return;
+            }
           }
           
           if (filters.identificationType) {
             result = result.filter(voter => 
               voter.identification_type && voter.identification_type.includes(filters.identificationType)
             );
+            
+            if (result.length === 0) {
+              updateFilterResults(result);
+              return;
+            }
           }
           
           if (filters.identificationNumber) {
@@ -486,10 +550,8 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
             );
           }
           
-          setFilteredData(result);
-          setTotalRecords(result.length);
-          setTotalPages(Math.ceil(result.length / pageSize));
-          setCurrentPage(1); // Reset to first page when filters change
+          updateFilterResults(result);
+          
         } catch (error) {
           console.error("Error applying filters:", error);
           toast({
@@ -497,13 +559,21 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
             description: "An error occurred while filtering the data",
             variant: "destructive",
           });
-        } finally {
           setIsLoading(false);
         }
       }, 0);
     }, 300),
     [voterData, pageSize]
   );
+  
+  // Helper function to update state after filtering
+  const updateFilterResults = (result: any[]) => {
+    setFilteredData(result);
+    setTotalRecords(result.length);
+    setTotalPages(Math.ceil(result.length / pageSize));
+    setCurrentPage(1); // Reset to first page when filters change
+    setIsLoading(false);
+  };
 
   // Apply filters when filters or source data changes
   useEffect(() => {

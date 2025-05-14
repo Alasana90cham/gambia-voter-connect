@@ -107,8 +107,8 @@ const PaginationEllipsis = ({
 )
 PaginationEllipsis.displayName = "PaginationEllipsis"
 
-// New function to generate optimized pagination range for large datasets
-const generatePaginationItems = (currentPage: number, totalPages: number) => {
+// Enhanced pagination range generation for large datasets
+const generatePaginationItems = (currentPage: number, totalPages: number): (number | string)[] => {
   // Always show first and last page
   // For other pages, show a window around current page and use ellipsis
   const items: (number | string)[] = [];
@@ -124,7 +124,7 @@ const generatePaginationItems = (currentPage: number, totalPages: number) => {
     
     // Calculate the window around current page
     if (currentPage <= 3) {
-      items.push(2, 3, 4, "ellipsis", totalPages - 1, totalPages);
+      items.push(2, 3, 4, "ellipsis", totalPages);
     } else if (currentPage >= totalPages - 2) {
       items.push("ellipsis", totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
     } else {
@@ -140,7 +140,7 @@ const generatePaginationItems = (currentPage: number, totalPages: number) => {
   }
   
   return items;
-}
+};
 
 export {
   Pagination,

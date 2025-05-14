@@ -34,3 +34,4 @@ refresh_token_reuse_interval = 10
 
 [realtime]
 enabled = true
+max_records = 100000

@@ -154,16 +154,20 @@ export const batchOperation = async (items, operationFn, batchSize = 100) => {
   return results;
 };
 
-// Add function for paginated fetches to handle large datasets - Fix TS2339 errors with proper types
-export const fetchPaginated = async (tableName: string, options: {
-  filters?: Record<string, any> | undefined;
-  orderBy?: string | undefined;
-  ascending?: boolean | undefined;
-} = {}, pageSize = 500) => {
+// Add function for paginated fetches to handle large datasets with proper typing
+export const fetchPaginated = async <T>(
+  tableName: 'admins' | 'voters', // Fix: restrict to actual table names
+  options: {
+    filters?: Record<string, any> | undefined;
+    orderBy?: string | undefined;
+    ascending?: boolean | undefined;
+  } = {}, 
+  pageSize = 500
+): Promise<T[]> => {
   const { filters = {}, orderBy = 'created_at', ascending = true } = options;
   let page = 0;
   let hasMore = true;
-  const allResults = [];
+  const allResults: T[] = [];
 
   while (hasMore) {
     const start = page * pageSize;
@@ -174,9 +178,10 @@ export const fetchPaginated = async (tableName: string, options: {
       .order(orderBy, { ascending })
       .range(start, start + pageSize - 1);
     
-    // Apply any filters - Fix TS2345 by using proper typing for key values
+    // Apply any filters with proper typing
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
+        // Use type assertion here to resolve the type issue
         query = query.eq(key, value);
       }
     });
@@ -189,7 +194,7 @@ export const fetchPaginated = async (tableName: string, options: {
     }
     
     if (data && data.length > 0) {
-      allResults.push(...data);
+      allResults.push(...data as T[]);
     }
     
     hasMore = data && data.length === pageSize;
