@@ -41,7 +41,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
       'X-Client-Info': 'supabase-js/2.x'
     },
     fetch: (url, options) => {
-      const timeout = 60000; // Increased timeout to 60 seconds for larger operations
+      const timeout = 120000; // Increased timeout to 120 seconds for larger operations
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
       
@@ -53,9 +53,9 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   },
   realtime: {
     params: {
-      eventsPerSecond: 20, // Increased rate limit for realtime events
+      eventsPerSecond: 30, // Increased rate limit for realtime events
     },
-    timeout: 120000, // Doubled timeout for better reliability with large data
+    timeout: 240000, // Extended timeout for better reliability with large data
     headers: {
       'Cache-Control': 'no-cache',
       'Pragma': 'no-cache'
@@ -138,7 +138,7 @@ supabase.auth.signInWithPassword = async (credentials) => {
 };
 
 // Add optimized batch operations for handling large datasets
-export const batchOperation = async (items, operationFn, batchSize = 100) => {
+export const batchOperation = async (items, operationFn, batchSize = 500) => {
   const batches = [];
   
   for (let i = 0; i < items.length; i += batchSize) {
@@ -167,53 +167,73 @@ export const fetchPaginated = async <T>(
     orderBy?: string;
     ascending?: boolean;
   } = {}, 
-  pageSize = 1000
+  pageSize = 5000 // Increased page size for larger datasets
 ): Promise<T[]> => {
   const { filters = {}, orderBy = 'created_at', ascending = true } = options;
   let page = 0;
   let hasMore = true;
   const allResults: T[] = [];
+  const maxPages = 100; // Safety limit to prevent infinite loops
 
-  while (hasMore) {
-    const start = page * pageSize;
-    
-    // Using a simpler approach to avoid excessive type instantiation
-    let query = supabase.from(tableName).select('*', { count: 'exact' });
-    
-    // Add ordering
-    query = query.order(orderBy, { ascending });
-    
-    // Add range
-    query = query.range(start, start + pageSize - 1);
-    
-    // Apply filters manually to avoid the type depth issue
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        // @ts-ignore - Ignore the typing here to prevent depth error
-        query = query.eq(key, value);
+  try {
+    while (hasMore && page < maxPages) {
+      const start = page * pageSize;
+      
+      // Using a simpler approach to avoid excessive type instantiation
+      let query = supabase.from(tableName).select('*', { count: 'exact' });
+      
+      // Add ordering
+      query = query.order(orderBy, { ascending });
+      
+      // Add range
+      query = query.range(start, start + pageSize - 1);
+      
+      // Apply filters manually to avoid the type depth issue
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          // @ts-ignore - Ignore the typing here to prevent depth error
+          query = query.eq(key, value);
+        }
+      });
+
+      console.log(`Fetching ${tableName} page ${page + 1} (${start}-${start + pageSize - 1})`);
+      const { data, error, count } = await query;
+      
+      if (error) {
+        console.error(`Error fetching paginated data (page ${page + 1}):`, error);
+        throw error;
       }
-    });
-
-    const { data, error, count } = await query;
-    
-    if (error) {
-      console.error('Error fetching paginated data:', error);
-      throw error;
+      
+      if (data && data.length > 0) {
+        console.log(`Received ${data.length} records for page ${page + 1}`);
+        allResults.push(...data as T[]);
+      } else {
+        console.log(`No data received for page ${page + 1}`);
+      }
+      
+      // Check if we have more data to fetch
+      hasMore = data && data.length === pageSize;
+      page++;
+      
+      // If count is available, use it to calculate total pages and check if we're done
+      if (typeof count === 'number') {
+        const totalPages = Math.ceil(count / pageSize);
+        console.log(`Fetched page ${page} of ${totalPages} (${allResults.length}/${count} total records)`);
+        
+        // Break if we've fetched all records
+        if (allResults.length >= count) {
+          hasMore = false;
+        }
+      }
     }
     
-    if (data && data.length > 0) {
-      allResults.push(...data as T[]);
+    if (page >= maxPages) {
+      console.warn(`Reached maximum page limit (${maxPages}) for ${tableName}`);
     }
     
-    hasMore = data && data.length === pageSize;
-    page++;
-    
-    // Safety measure to prevent infinite loops
-    if (page > 100) {
-      console.warn('Pagination safety limit reached');
-      hasMore = false;
-    }
+    return allResults;
+  } catch (error) {
+    console.error('Error in fetchPaginated:', error);
+    throw error;
   }
-  
-  return allResults;
 };

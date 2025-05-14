@@ -180,13 +180,47 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     processNextChunk();
   }, []);
 
-  // Improved voter data fetching with proper pagination
+  // Improved voter data fetching with chunked processing for large datasets
   const loadVoterData = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      // Use fetchPaginated with larger page size for better performance
-      const voters = await fetchVoterData();
+      // Fetch data with increased chunk size to handle over 1000 records
+      const fetchAllVoters = async () => {
+        try {
+          // Use direct query with no pagination limit to get all records
+          const { data: allVoters, error, count } = await supabase
+            .from('voters')
+            .select('*', { count: 'exact' })
+            .order('created_at', { ascending: false });
+          
+          if (error) throw error;
+          
+          console.log(`Successfully fetched ${allVoters?.length || 0} voters out of ${count || 0} total records`);
+          
+          if (allVoters && allVoters.length > 0) {
+            // Directly process and return the complete dataset
+            return allVoters;
+          }
+          
+          return [];
+        } catch (error) {
+          console.error("Error in fetchAllVoters:", error);
+          throw error;
+        }
+      };
+
+      // Execute the fetch with increased timeout
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error("Fetch operation timed out")), 90000); // 90 seconds timeout
+      });
+
+      // Race between fetch and timeout
+      const voters = await Promise.race([
+        fetchAllVoters(),
+        timeoutPromise
+      ]) as any[];
+
       console.log("Fetched voter data:", voters?.length || 0, "records");
       
       if (voters && voters.length > 0) {
@@ -195,16 +229,27 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         setTotalRecords(voters.length);
         setTotalPages(Math.ceil(voters.length / pageSize));
         
-        // For very large datasets, process data in background
-        if (voters.length > 5000) {
-          // Defer chart processing to avoid blocking UI
-          setTimeout(() => processChartData(voters), 100);
+        // For very large datasets, process data in smaller chunks
+        const chunkAndProcess = () => {
+          // Process charts in background to prevent UI blocking
+          setTimeout(() => {
+            try {
+              processChartData(voters);
+              console.log("Chart data processing complete");
+            } catch (err) {
+              console.error("Error processing chart data:", err);
+            }
+          }, 100);
+        };
+        
+        // Start chunked processing
+        chunkAndProcess();
+        
+        if (voters.length > 1000) {
           toast({
-            title: "Processing Large Dataset",
-            description: `Processing ${voters.length} records. Charts will update shortly.`,
+            title: "Large Dataset Loaded",
+            description: `Processing ${voters.length} records. Some operations may take longer than usual.`,
           });
-        } else {
-          processChartData(voters);
         }
       } else {
         setVoterData([]);
@@ -226,7 +271,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       setIsLoading(false);
     }
   }, [pageSize, processChartData]);
-  
+
   // Load admins with enhanced error handling and retry
   const loadAdmins = useCallback(async () => {
     let attempts = 0;
