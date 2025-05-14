@@ -58,22 +58,21 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   db: {
     schema: 'public'
   }
-  // Removed invalid queryOptions property
 });
 
 // Enhanced connection pooling and request monitoring
 let failedRequests = 0;
-const maxRetries = 5; // Increased from 3 to 5
+const maxRetries = 5;
 const connectionPool = new Set();
-const maxPoolSize = 50; // Increased from 25 to 50
+const maxPoolSize = 50;
 
-// Enhanced error handling with retry logic and exponential backoff
+// Simplified handleRequestWithRetry function to avoid excessive type instantiation
 const handleRequestWithRetry = async (requestFn) => {
   let retries = 0;
+  
   while (retries < maxRetries) {
     try {
       if (connectionPool.size >= maxPoolSize) {
-        // Implement a more sophisticated queue system with priority
         const delay = 50 * Math.pow(2, retries);
         await new Promise(resolve => setTimeout(resolve, delay));
       }
@@ -91,7 +90,7 @@ const handleRequestWithRetry = async (requestFn) => {
         console.error('Maximum retries reached for Supabase request');
         throw error;
       }
-      // Enhanced exponential backoff with jitter
+      
       const baseDelay = 200 * Math.pow(2, retries);
       const jitter = Math.random() * 300;
       await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
@@ -156,11 +155,11 @@ export const batchOperation = async (items, operationFn, batchSize = 100) => {
 
 // Add function for paginated fetches to handle large datasets with proper typing
 export const fetchPaginated = async <T>(
-  tableName: 'admins' | 'voters', // Fix: restrict to actual table names
+  tableName: 'admins' | 'voters',
   options: {
-    filters?: Record<string, any> | undefined;
-    orderBy?: string | undefined;
-    ascending?: boolean | undefined;
+    filters?: Record<string, any>;
+    orderBy?: string;
+    ascending?: boolean;
   } = {}, 
   pageSize = 500
 ): Promise<T[]> => {
@@ -178,10 +177,9 @@ export const fetchPaginated = async <T>(
       .order(orderBy, { ascending })
       .range(start, start + pageSize - 1);
     
-    // Apply any filters with proper typing
+    // Apply any filters
     Object.entries(filters).forEach(([key, value]) => {
       if (value !== undefined && value !== null && value !== '') {
-        // Use type assertion here to resolve the type issue
         query = query.eq(key, value);
       }
     });
