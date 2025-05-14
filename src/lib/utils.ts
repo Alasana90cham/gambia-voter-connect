@@ -1,4 +1,3 @@
-
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -87,3 +86,20 @@ export function throttle<T extends (...args: any[]) => any>(
 export function uniqueId(prefix = ''): string {
   return `${prefix}${Math.random().toString(36).substring(2, 11)}`;
 }
+
+// Format date to a human-readable string (YYYY-MM-DD)
+export const formatDate = (dateString: string | Date): string => {
+  if (!dateString) return '';
+  
+  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
+  
+  // Check if date is valid
+  if (isNaN(date.getTime())) return '';
+  
+  // Format as YYYY-MM-DD
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`;
+};

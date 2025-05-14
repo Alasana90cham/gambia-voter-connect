@@ -1,6 +1,4 @@
 
-import { ChartData } from 'recharts';
-
 export interface FilterState {
   fullName: string;
   organization: string;
@@ -15,8 +13,8 @@ export interface FilterState {
 export interface RegistrationTableProps {
   voterData: any[];
   filteredData: any[];
-  regionData: ChartData[];
-  constituencyData: { [key: string]: ChartData[] };
+  regionData: any[]; // Changed from ChartData[] to any[]
+  constituencyData: { [key: string]: any[] }; // Changed from ChartData[] to any[]
   currentPage: number;
   pageSize: number;
   setCurrentPage: (page: number) => void;
