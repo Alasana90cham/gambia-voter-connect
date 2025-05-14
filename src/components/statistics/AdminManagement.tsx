@@ -9,9 +9,10 @@ import InitialSetupButton from './InitialSetupButton';
 
 interface AdminManagementProps {
   adminList: UserRole[];
+  onUpdateSuccess?: () => void;
 }
 
-const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
+const AdminManagement: React.FC<AdminManagementProps> = ({ adminList, onUpdateSuccess }) => {
   const [initialAdminSetupDone, setInitialAdminSetupDone] = useState(false);
   
   useEffect(() => {
@@ -25,15 +26,24 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList }) => {
   
   const handleAdminAdded = () => {
     // The parent component (Statistics.tsx) will handle reload via Supabase subscriptions
+    if (onUpdateSuccess) {
+      onUpdateSuccess();
+    }
   };
   
   const handleAdminDeleted = () => {
     // The parent component (Statistics.tsx) will handle reload via Supabase subscriptions
+    if (onUpdateSuccess) {
+      onUpdateSuccess();
+    }
   };
   
   const handleSetupComplete = () => {
     setInitialAdminSetupDone(true);
     // The parent component (Statistics.tsx) will handle reload via Supabase subscriptions
+    if (onUpdateSuccess) {
+      onUpdateSuccess();
+    }
   };
 
   return (

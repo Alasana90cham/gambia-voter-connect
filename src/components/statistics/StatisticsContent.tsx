@@ -96,7 +96,10 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
         </TabsContent>
         
         <TabsContent value="admin">
-          <AdminManagement />
+          <AdminManagement 
+            adminList={[]} 
+            onUpdateSuccess={handleDeleteSuccess} 
+          />
         </TabsContent>
       </Tabs>
       
