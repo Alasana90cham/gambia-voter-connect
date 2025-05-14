@@ -107,58 +107,58 @@ const PaginationEllipsis = ({
 )
 PaginationEllipsis.displayName = "PaginationEllipsis"
 
-// Enhanced pagination range generation for large datasets with improved algorithm
+// Improved pagination range generation for very large datasets
 const generatePaginationItems = (currentPage: number, totalPages: number): (number | string)[] => {
-  // Always show first and last page
-  // For other pages, show a window around current page and use ellipsis
+  // For very large datasets, we need a more sophisticated approach
   const items: (number | string)[] = [];
   
-  if (totalPages <= 7) {
-    // If 7 or fewer pages, show all
-    for (let i = 1; i <= totalPages; i++) {
+  // For massive datasets, use a dynamic window approach
+  if (totalPages <= 1) {
+    return [1]; // Only one page
+  }
+  
+  // Always show first page
+  items.push(1);
+  
+  // Determine the range of pages to show around current page
+  let rangeStart = Math.max(2, currentPage - 2);
+  let rangeEnd = Math.min(totalPages - 1, currentPage + 2);
+  
+  // Adjust range to always show 5 pages if possible
+  if (rangeEnd - rangeStart < 4) {
+    if (currentPage < totalPages / 2) {
+      // Near the start, extend end
+      rangeEnd = Math.min(totalPages - 1, rangeStart + 4);
+    } else {
+      // Near the end, extend start
+      rangeStart = Math.max(2, rangeEnd - 4);
+    }
+  }
+  
+  // Add ellipsis between 1 and rangeStart if needed
+  if (rangeStart > 2) {
+    items.push("ellipsis");
+  } else if (rangeStart === 2) {
+    items.push(2); // No need for ellipsis, just show 2
+  }
+  
+  // Add the pages in range
+  for (let i = rangeStart; i <= rangeEnd; i++) {
+    if (i !== 1 && i !== totalPages) { // Skip 1 and totalPages as they're handled separately
       items.push(i);
     }
-  } else if (totalPages > 1000) {
-    // Special handling for very large numbers of pages
-    items.push(1);
-    
-    if (currentPage <= 4) {
-      // Near start
-      items.push(2, 3, 4, 5, "ellipsis", totalPages);
-    } else if (currentPage >= totalPages - 3) {
-      // Near end
-      items.push("ellipsis", totalPages - 4, totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-    } else {
-      // In the middle - show current page, 2 before and 2 after
-      items.push(
-        "ellipsis",
-        currentPage - 2,
-        currentPage - 1,
-        currentPage,
-        currentPage + 1,
-        currentPage + 2,
-        "ellipsis",
-        totalPages
-      );
-    }
-  } else {
-    // Standard pagination for moderate number of pages
-    items.push(1);
-    
-    if (currentPage <= 3) {
-      items.push(2, 3, 4, "ellipsis", totalPages);
-    } else if (currentPage >= totalPages - 2) {
-      items.push("ellipsis", totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
-    } else {
-      items.push(
-        "ellipsis",
-        currentPage - 1,
-        currentPage,
-        currentPage + 1,
-        "ellipsis",
-        totalPages
-      );
-    }
+  }
+  
+  // Add ellipsis between rangeEnd and totalPages if needed
+  if (rangeEnd < totalPages - 1) {
+    items.push("ellipsis");
+  } else if (rangeEnd === totalPages - 1) {
+    items.push(totalPages - 1); // No need for ellipsis
+  }
+  
+  // Always show last page if more than 1 page
+  if (totalPages > 1) {
+    items.push(totalPages);
   }
   
   return items;

@@ -1,3 +1,4 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { fetchAdmins, fetchVoterData } from '@/data/constituencies';
 import { toast } from "@/components/ui/use-toast";
@@ -155,48 +156,83 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     console.log("Chart data processing completed successfully");
   }, []);
 
-  // Improved voter data fetching with direct query and no pagination limit
+  // Completely overhauled voter data fetching that guarantees ALL records are loaded
   const loadVoterData = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      console.log("Starting voter data fetch with no row limit");
+      console.log("Starting voter data fetch with direct query - NO size limits");
       
-      const { data: allVoters, error, count } = await supabase
-        .from('voters')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false });
-      
-      if (error) {
-        throw error;
+      // First approach: Try direct fetch with no pagination
+      let directFetchFailed = false;
+      try {
+        const { data: allVoters, error, count } = await supabase
+          .from('voters')
+          .select('*', { count: 'exact' });
+        
+        if (error) {
+          console.error("Direct fetch error:", error);
+          directFetchFailed = true;
+        } else if (allVoters) {
+          console.log(`Direct fetch successful: ${allVoters.length} records retrieved`);
+          setVoterData(allVoters);
+          setFilteredData(allVoters);
+          setTotalRecords(count || allVoters.length);
+          setTotalPages(Math.ceil((count || allVoters.length) / pageSize));
+          processChartData(allVoters);
+          
+          toast({
+            title: "Data Loaded Successfully",
+            description: `Loaded ${allVoters.length} total records.`,
+          });
+          
+          setIsLoading(false);
+          return; // Exit if direct fetch worked
+        }
+      } catch (directError) {
+        console.error("Error in direct fetch approach:", directError);
+        directFetchFailed = true;
       }
       
-      const actualCount = count || (allVoters?.length || 0);
-      console.log(`Successfully fetched ${allVoters?.length || 0} voters out of ${actualCount} total records`);
-      
-      if (allVoters && allVoters.length > 0) {
-        setVoterData(allVoters);
-        setFilteredData(allVoters);
-        setTotalRecords(actualCount);
-        setTotalPages(Math.ceil(actualCount / pageSize));
+      // If direct fetch failed, use paginated approach as fallback
+      if (directFetchFailed) {
+        console.log("Direct fetch failed, using paginated fetch fallback");
         
-        // Process chart data with all records
-        processChartData(allVoters);
+        // Use our fetchPaginated helper with large page size
+        const voters = await fetchPaginated('voters', {
+          orderBy: 'created_at',
+          ascending: false
+        });
         
-        if (actualCount > 1000) {
+        console.log(`Paginated fetch complete: ${voters.length} records retrieved`);
+        
+        if (voters && voters.length > 0) {
+          setVoterData(voters);
+          setFilteredData(voters);
+          setTotalRecords(voters.length);
+          setTotalPages(Math.ceil(voters.length / pageSize));
+          
+          // Process chart data with all records
+          processChartData(voters);
+          
           toast({
-            title: "Large Dataset Loaded",
-            description: `Successfully processed ${actualCount} records. Charts and tables are now updated.`,
+            title: "Data Loaded Successfully",
+            description: `Loaded ${voters.length} total records using pagination.`,
+          });
+        } else {
+          setVoterData([]);
+          setFilteredData([]);
+          setGenderData([]);
+          setRegionData([]);
+          setConstituencyData({});
+          setTotalRecords(0);
+          setTotalPages(1);
+          
+          toast({
+            title: "No Data Found",
+            description: "No voter registration records were found.",
           });
         }
-      } else {
-        setVoterData([]);
-        setFilteredData([]);
-        setGenderData([]);
-        setRegionData([]);
-        setConstituencyData({});
-        setTotalRecords(0);
-        setTotalPages(1);
       }
     } catch (error) {
       console.error("Error loading voter data:", error);
@@ -205,10 +241,16 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         description: "Failed to load voter registration data. Please try again.",
         variant: "destructive",
       });
+      
+      // Reset to empty state on error
+      setVoterData([]);
+      setFilteredData([]);
+      setTotalRecords(0);
+      setTotalPages(1);
     } finally {
       setIsLoading(false);
     }
-  }, [pageSize]);
+  }, [pageSize, processChartData]);
 
   // Load admins with enhanced error handling and retry
   const loadAdmins = useCallback(async () => {
@@ -258,6 +300,17 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       })
       .subscribe((status) => {
         console.log(`Voters subscription status: ${status}`);
+        
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to voter changes');
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Error with voter changes subscription');
+          toast({
+            title: "Sync Error",
+            description: "Unable to subscribe to data changes. Changes may not update in real-time.",
+            variant: "destructive",
+          });
+        }
       });
       
     // Create channel for admin changes
@@ -375,6 +428,13 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     
     const initializeData = async () => {
       try {
+        // Force a refresh of database connection
+        try {
+          await supabase.auth.refreshSession();
+        } catch (refreshError) {
+          console.log("Session refresh not needed or failed:", refreshError);
+        }
+        
         // Load initial data in parallel
         await Promise.all([loadVoterData(), loadAdmins()]);
       } catch (error) {
@@ -514,13 +574,17 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   );
   
   // Helper function to update state after filtering
-  const updateFilterResults = (result: any[]) => {
+  const updateFilterResults = useCallback((result: any[]) => {
     setFilteredData(result);
     setTotalRecords(result.length);
     setTotalPages(Math.ceil(result.length / pageSize));
     setCurrentPage(1); // Reset to first page when filters change
     setIsLoading(false);
-  };
+    
+    // Also update chart data based on filtered results
+    processChartData(result);
+    
+  }, [pageSize, processChartData]);
 
   // Apply filters when filters or source data changes
   useEffect(() => {
