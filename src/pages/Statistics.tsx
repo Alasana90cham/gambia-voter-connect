@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import AdminLogin from '@/components/statistics/AdminLogin';
@@ -7,6 +7,8 @@ import { StatisticsProvider } from '@/components/statistics/StatisticsContext';
 import StatisticsContent from '@/components/statistics/StatisticsContent';
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { Skeleton } from "@/components/ui/skeleton";
+import { useToast } from "@/hooks/use-toast";
 
 // Session timeout in milliseconds (2 hours)
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
@@ -15,6 +17,8 @@ const Statistics = () => {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
+  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
+  const { toast } = useToast();
 
   // Reset the inactivity timer
   const resetInactivityTimer = () => {
@@ -65,6 +69,44 @@ const Statistics = () => {
       };
     }
   }, [isAdmin]);
+
+  // Monitor connection status
+  const checkConnectionStatus = useCallback(async () => {
+    try {
+      setConnectionStatus('connecting');
+      const { error } = await supabase.from('voters').select('count').limit(1);
+      
+      if (error) {
+        console.error('Connection check failed:', error);
+        setConnectionStatus('disconnected');
+        toast({
+          title: "Connection Issue",
+          description: "Having trouble connecting to the database. Will retry automatically.",
+          variant: "destructive",
+        });
+      } else {
+        setConnectionStatus('connected');
+      }
+    } catch (e) {
+      console.error('Connection check exception:', e);
+      setConnectionStatus('disconnected');
+    }
+  }, [toast]);
+
+  // Periodically check connection status
+  useEffect(() => {
+    // Check connection immediately
+    checkConnectionStatus();
+    
+    // Then check every 30 seconds
+    const intervalId = setInterval(() => {
+      if (connectionStatus !== 'connected') {
+        checkConnectionStatus();
+      }
+    }, 30000);
+    
+    return () => clearInterval(intervalId);
+  }, [checkConnectionStatus, connectionStatus]);
 
   // Check for existing admin session on component mount
   useEffect(() => {
@@ -139,7 +181,35 @@ const Statistics = () => {
     };
     
     checkSupabaseConnection();
-  }, []);
+  }, [toast]);
+
+  // Setup connection recovery for offline scenarios
+  useEffect(() => {
+    const handleOnline = () => {
+      toast({
+        title: "Connection Restored",
+        description: "Your internet connection is back online.",
+      });
+      checkConnectionStatus();
+    };
+    
+    const handleOffline = () => {
+      setConnectionStatus('disconnected');
+      toast({
+        title: "Connection Lost",
+        description: "Your internet connection is offline. Changes will be queued until connection is restored.",
+        variant: "destructive",
+      });
+    };
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, [toast, checkConnectionStatus]);
 
   const handleLoginSuccess = () => {
     setIsAdmin(true);
@@ -179,6 +249,24 @@ const Statistics = () => {
     );
   }
 
+  // Display connection status indicator
+  const ConnectionIndicator = () => (
+    <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-white dark:bg-gray-800 p-2 rounded-md shadow-lg">
+      <div 
+        className={`w-3 h-3 rounded-full ${
+          connectionStatus === 'connected' ? 'bg-green-500' : 
+          connectionStatus === 'connecting' ? 'bg-amber-500 animate-pulse' : 
+          'bg-red-500'
+        }`} 
+      />
+      <span className="text-xs">
+        {connectionStatus === 'connected' ? 'Online' : 
+         connectionStatus === 'connecting' ? 'Connecting...' : 
+         'Offline (changes will be queued)'}
+      </span>
+    </div>
+  );
+
   // Component rendering based on authentication state
   if (!isAdmin) {
     return (
@@ -188,6 +276,7 @@ const Statistics = () => {
           <AdminLogin onLoginSuccess={handleLoginSuccess} />
         </main>
         <Footer />
+        <ConnectionIndicator />
       </div>
     );
   }
@@ -203,6 +292,7 @@ const Statistics = () => {
       </StatisticsProvider>
       
       <Footer />
+      <ConnectionIndicator />
     </div>
   );
 };

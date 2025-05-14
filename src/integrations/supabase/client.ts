@@ -26,6 +26,7 @@ declare module '@supabase/supabase-js' {
   }
 }
 
+// Create the Supabase client with improved reliability settings
 export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
   auth: {
     persistSession: true,
@@ -41,14 +42,15 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
       'X-Client-Info': 'supabase-js/2.x'
     },
     fetch: (url, options) => {
-      // Increased timeout to 15 minutes for very large dataset operations
-      const timeout = 900000; 
+      // Increased timeout to 20 minutes for very large dataset operations
+      const timeout = 1200000; 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
       
       return fetch(url, {
         ...options,
         signal: controller.signal,
+        keepalive: true, // Ensure connection stays alive
       }).finally(() => clearTimeout(timeoutId));
     }
   },
@@ -57,26 +59,90 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   },
   realtime: {
     params: {
-      eventsPerSecond: 60, // Increased rate limit for more frequent updates
+      eventsPerSecond: 100, // Increased rate limit for more frequent updates
     }
   }
 });
 
-// Enhanced connection pooling and request monitoring
+// CRITICAL DATA INTEGRITY: Enhanced connection pooling and request monitoring
 let failedRequests = 0;
-const maxRetries = 7; // Increased for better resilience
+let recoveryInProgress = false;
+const maxRetries = 10; // Increased for better resilience
 const connectionPool = new Set();
-const maxPoolSize = 200; // Increased for better concurrency
+const maxPoolSize = 500; // Increased for better concurrency
+const offlineQueue: Array<() => Promise<any>> = [];
+let networkStatus: 'online' | 'offline' = 'online';
 
-// Simplified handleRequestWithRetry function to avoid excessive type instantiation
-const handleRequestWithRetry = async (requestFn) => {
+// Network status monitor
+if (typeof window !== 'undefined') {
+  window.addEventListener('online', () => {
+    console.log('Network connection restored');
+    networkStatus = 'online';
+    processOfflineQueue();
+  });
+  
+  window.addEventListener('offline', () => {
+    console.log('Network connection lost, queuing operations');
+    networkStatus = 'offline';
+  });
+}
+
+// Process queued operations when connection is restored
+const processOfflineQueue = async () => {
+  if (recoveryInProgress || offlineQueue.length === 0) return;
+  
+  recoveryInProgress = true;
+  console.log(`Processing ${offlineQueue.length} queued operations`);
+  
+  let successCount = 0;
+  
+  while (offlineQueue.length > 0) {
+    const operation = offlineQueue.shift();
+    if (!operation) continue;
+    
+    try {
+      await operation();
+      successCount++;
+    } catch (error) {
+      console.error('Failed to process queued operation:', error);
+      // Re-queue critical operations with backoff
+      if (offlineQueue.length < 1000) { // Prevent queue from growing infinitely
+        offlineQueue.push(operation);
+      }
+    }
+    
+    // Small delay between operations to avoid overwhelming the server
+    await new Promise(resolve => setTimeout(resolve, 50));
+  }
+  
+  console.log(`Recovery completed: ${successCount} operations processed`);
+  recoveryInProgress = false;
+};
+
+// SUPER-RELIABLE request handling with retry logic, queuing and persistence
+export const handleRequestWithRetry = async <T>(requestFn: () => Promise<T>): Promise<T> => {
   let retries = 0;
+  
+  // If offline, queue the operation and return a promise that resolves when online
+  if (networkStatus === 'offline') {
+    return new Promise((resolve, reject) => {
+      offlineQueue.push(async () => {
+        try {
+          const result = await handleRequestWithRetry(requestFn);
+          resolve(result);
+        } catch (error) {
+          reject(error);
+        }
+      });
+    });
+  }
   
   while (retries < maxRetries) {
     try {
+      // Connection pool management
       if (connectionPool.size >= maxPoolSize) {
         const delay = 50 * Math.pow(2, retries);
-        await new Promise(resolve => setTimeout(resolve, delay));
+        await new Promise(resolve => setTimeout(resolve, delay + Math.random() * 100));
       }
       
       const requestId = Date.now() + Math.random();
@@ -85,21 +151,33 @@ const handleRequestWithRetry = async (requestFn) => {
       const result = await requestFn();
       
       connectionPool.delete(requestId);
+      failedRequests = 0; // Reset counter on success
       return result;
-    } catch (error) {
+    } catch (error: any) {
       retries++;
       console.error(`Supabase request failed (attempt ${retries}/${maxRetries}):`, error);
       
-      if (retries >= maxRetries) {
-        console.error('Maximum retries reached for Supabase request');
-        throw error;
+      // Add special handling for specific error types
+      if (error?.message?.includes('network') || error?.message?.includes('timeout')) {
+        console.warn('Network-related error detected, implementing recovery strategy');
+        // Increased delay for network issues
+        const baseDelay = 500 * Math.pow(2, retries);
+        await new Promise(resolve => setTimeout(resolve, baseDelay + Math.random() * 500));
+      } else {
+        const baseDelay = 200 * Math.pow(2, retries);
+        const jitter = Math.random() * 300;
+        await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
       }
       
-      const baseDelay = 200 * Math.pow(2, retries);
-      const jitter = Math.random() * 300;
-      await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
+      if (retries >= maxRetries) {
+        failedRequests++;
+        console.error(`Maximum retries (${maxRetries}) reached for Supabase request`);
+        throw new Error(`Request failed after ${maxRetries} attempts: ${error.message || 'Unknown error'}`);
+      }
     }
   }
+  
+  throw new Error("Request failed with unknown error");
 };
 
 // Monitor for authentication failures
@@ -157,7 +235,62 @@ export const batchOperation = async (items, operationFn, batchSize = 750) => {
   return results;
 };
 
-// IMPROVED: Complete reimplementation of fetchPaginated with UNLIMITED record support
+// CRITICAL: Implement failsafe data insurance for form submissions
+export const insuranceSubmit = async <T>(
+  tableName: string,
+  data: any,
+  attempts = 3
+): Promise<T> => {
+  // First, save to local storage as backup
+  const localBackupKey = `${tableName}_backup_${Date.now()}`;
+  if (typeof localStorage !== 'undefined') {
+    try {
+      localStorage.setItem(localBackupKey, JSON.stringify({
+        table: tableName,
+        data: data,
+        timestamp: Date.now()
+      }));
+    } catch (e) {
+      console.warn('Could not save backup to localStorage', e);
+      // Continue anyway - localStorage is just a backup
+    }
+  }
+  
+  // Try to submit to Supabase
+  try {
+    const result = await handleRequestWithRetry(async () => {
+      const { data: responseData, error } = await supabase
+        .from(tableName)
+        .insert(data)
+        .select();
+        
+      if (error) throw error;
+      return responseData;
+    });
+    
+    // On success, clean up the local backup
+    if (typeof localStorage !== 'undefined') {
+      try {
+        localStorage.removeItem(localBackupKey);
+      } catch (e) {
+        // Ignore cleanup errors
+      }
+    }
+    
+    return result as T;
+  } catch (error) {
+    console.error(`Failed to submit data to ${tableName} after multiple attempts`, error);
+    
+    // Failed after all attempts, add to recovery queue
+    offlineQueue.push(async () => {
+      return insuranceSubmit(tableName, data, attempts + 1);
+    });
+    
+    throw error;
+  }
+};
+
+// ENHANCED: Complete reimplementation of fetchPaginated with UNLIMITED record support
 // and multiple fail-safe mechanisms to ensure ALL records are retrieved
 export const fetchPaginated = async <T>(
   tableName: 'admins' | 'voters',
@@ -316,6 +449,34 @@ export const fetchPaginated = async <T>(
       }
     }
     
+    // Add additional recovery mechanism to check for broken records
+    try {
+      // Find any orphaned/stuck records in local backups
+      if (typeof localStorage !== 'undefined') {
+        const potentialBackups = [];
+        for (let i = 0; i < localStorage.length; i++) {
+          const key = localStorage.key(i);
+          if (key && key.includes(`${tableName}_backup_`)) {
+            try {
+              const backupData = JSON.parse(localStorage.getItem(key) || '');
+              if (backupData && backupData.table === tableName) {
+                potentialBackups.push({ key, data: backupData });
+              }
+            } catch (e) {
+              // Skip invalid JSON
+            }
+          }
+        }
+        
+        if (potentialBackups.length > 0) {
+          console.log(`Found ${potentialBackups.length} potential ${tableName} records in local storage`);
+          // We could trigger recovery here if needed
+        }
+      }
+    } catch (e) {
+      // Ignore local storage errors
+    }
+    
     console.log(`FINAL RESULT: Fetched ${allResults.length} total records from ${tableName}`);
     return allResults;
   } catch (error) {
@@ -323,3 +484,12 @@ export const fetchPaginated = async <T>(
     throw error;
   }
 };
+
+// Run recovery check on initialization
+if (typeof window !== 'undefined') {
+  window.addEventListener('load', () => {
+    setTimeout(() => {
+      processOfflineQueue();
+    }, 1000);
+  });
+}
