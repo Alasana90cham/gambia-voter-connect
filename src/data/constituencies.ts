@@ -61,7 +61,8 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
     'Niamina West',
     'Niamina East',
     'Upper Fulladu',
-    'Lower Fulladu'
+    'Lower Fulladu',
+    'Niamina Dankunkung'
   ],
   'Upper River': [
     'Basse',
