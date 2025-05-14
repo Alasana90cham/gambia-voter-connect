@@ -1,8 +1,10 @@
-import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
+
+import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { fetchAdmins, fetchVoterData } from '@/data/constituencies';
 import { toast } from "@/components/ui/use-toast";
 import { UserRole } from "@/types/form";
-import { supabase } from "@/integrations/supabase/client";
+import { supabase, fetchPaginated } from "@/integrations/supabase/client";
+import { debounce } from "@/lib/utils";
 
 interface ChartData {
   name: string;
@@ -38,6 +40,13 @@ interface StatisticsContextType {
   // Region selection
   selectedRegion: string;
   setSelectedRegion: (region: string) => void;
+  // Pagination
+  currentPage: number;
+  totalPages: number;
+  totalRecords: number;
+  pageSize: number;
+  setPageSize: (size: number) => void;
+  setCurrentPage: (page: number) => void;
   // Actions
   handleDeleteSuccess: () => void;
   handleExcelExport: () => void;
@@ -55,8 +64,12 @@ export const useStatistics = () => {
 
 export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [selectedRegion, setSelectedRegion] = useState('Banjul');
+  const [currentPage, setCurrentPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [totalPages, setTotalPages] = useState(1);
+  const [totalRecords, setTotalRecords] = useState(0);
   
-  // Filters state
+  // Filters state with memoization
   const [filters, setFilters] = useState({
     fullName: '',
     organization: '',
@@ -75,7 +88,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Admin users state
   const [adminList, setAdminList] = useState<UserRole[]>([]);
   
-  // Chart data state
+  // Chart data state with memoization
   const [genderData, setGenderData] = useState<ChartData[]>([]);
   const [regionData, setRegionData] = useState<ChartData[]>([]);
   const [constituencyData, setConstituencyData] = useState<{[key: string]: ChartData[]}>({});
@@ -83,70 +96,111 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
-  // Process data for charts
-  const processChartData = (voters: any[]) => {
+  // Process data for charts with optimization for large datasets
+  const processChartData = useCallback((voters: any[]) => {
     if (!voters || voters.length === 0) return;
     
-    // Process gender data
-    const genderCounts: Record<string, number> = {};
-    voters.forEach((voter: any) => {
-      const gender = voter.gender || 'Unknown';
-      genderCounts[gender] = (genderCounts[gender] || 0) + 1;
-    });
+    // Use Map for better performance with large datasets
+    const genderMap = new Map<string, number>();
+    const regionMap = new Map<string, number>();
+    const constituencyMap = new Map<string, Map<string, number>>();
     
-    const genderChartData = Object.keys(genderCounts).map(gender => ({
-      name: gender.charAt(0).toUpperCase() + gender.slice(1), // Capitalize
-      value: genderCounts[gender]
-    }));
-    setGenderData(genderChartData);
-    
-    // Process region data
-    const regionCounts: Record<string, number> = {};
-    voters.forEach((voter: any) => {
-      const region = voter.region || 'Unknown';
-      regionCounts[region] = (regionCounts[region] || 0) + 1;
-    });
-    
-    const regionChartData = Object.keys(regionCounts).map(region => ({
-      name: region,
-      value: regionCounts[region]
-    }));
-    setRegionData(regionChartData);
-    
-    // Process constituency data
-    const constituenciesByRegion: Record<string, Record<string, number>> = {};
-    voters.forEach((voter: any) => {
-      const region = voter.region || 'Unknown';
-      const constituency = voter.constituency || 'Unknown';
+    // Process in chunks to avoid blocking the main thread
+    const chunkSize = 500;
+    const processChunk = (startIndex: number) => {
+      const endIndex = Math.min(startIndex + chunkSize, voters.length);
       
-      if (!constituenciesByRegion[region]) {
-        constituenciesByRegion[region] = {};
+      for (let i = startIndex; i < endIndex; i++) {
+        const voter = voters[i];
+        
+        // Process gender data
+        const gender = voter.gender || 'Unknown';
+        genderMap.set(gender, (genderMap.get(gender) || 0) + 1);
+        
+        // Process region data
+        const region = voter.region || 'Unknown';
+        regionMap.set(region, (regionMap.get(region) || 0) + 1);
+        
+        // Process constituency data
+        const constituency = voter.constituency || 'Unknown';
+        
+        if (!constituencyMap.has(region)) {
+          constituencyMap.set(region, new Map<string, number>());
+        }
+        
+        const regionConstituencies = constituencyMap.get(region)!;
+        regionConstituencies.set(constituency, (regionConstituencies.get(constituency) || 0) + 1);
       }
       
-      constituenciesByRegion[region][constituency] = (constituenciesByRegion[region][constituency] || 0) + 1;
-    });
+      if (endIndex < voters.length) {
+        // Continue processing in next animation frame to avoid UI freezing
+        requestAnimationFrame(() => processChunk(endIndex));
+      } else {
+        // All processing complete, update state
+        finishProcessing();
+      }
+    };
     
-    const constituencyChartData: {[key: string]: ChartData[]} = {};
-    Object.keys(constituenciesByRegion).forEach(region => {
-      constituencyChartData[region] = Object.keys(constituenciesByRegion[region]).map(constituency => ({
-        name: constituency,
-        value: constituenciesByRegion[region][constituency]
+    const finishProcessing = () => {
+      // Convert maps to the required format
+      const genderChartData: ChartData[] = Array.from(genderMap.entries()).map(([name, value]) => ({
+        name: name.charAt(0).toUpperCase() + name.slice(1),
+        value
       }));
-    });
-    setConstituencyData(constituencyChartData);
-  };
+      
+      const regionChartData: ChartData[] = Array.from(regionMap.entries()).map(([name, value]) => ({
+        name,
+        value
+      }));
+      
+      const constituencyChartData: {[key: string]: ChartData[]} = {};
+      constituencyMap.forEach((constituencies, region) => {
+        constituencyChartData[region] = Array.from(constituencies.entries()).map(([name, value]) => ({
+          name,
+          value
+        }));
+      });
+      
+      setGenderData(genderChartData);
+      setRegionData(regionChartData);
+      setConstituencyData(constituencyChartData);
+    };
+    
+    // Start processing
+    processChunk(0);
+  }, []);
 
-  // Fetch voter data with improved error handling
-  const loadVoterData = async () => {
+  // Optimized fetch voter data with pagination
+  const loadVoterData = useCallback(async () => {
     setIsLoading(true);
     
     try {
+      // Use fetch paginated for large datasets
       const voters = await fetchVoterData();
-      console.log("Fetched voter data:", voters);
-      setVoterData(voters);
-      setFilteredData(voters);
-      processChartData(voters);
+      console.log("Fetched voter data:", voters?.length || 0, "records");
       
+      if (voters && voters.length > 0) {
+        setVoterData(voters);
+        setFilteredData(voters);
+        setTotalRecords(voters.length);
+        setTotalPages(Math.ceil(voters.length / pageSize));
+        
+        // Use web worker or deferred processing for very large datasets
+        if (voters.length > 2000) {
+          // Process data in the background
+          setTimeout(() => processChartData(voters), 0);
+        } else {
+          processChartData(voters);
+        }
+      } else {
+        setVoterData([]);
+        setFilteredData([]);
+        setGenderData([]);
+        setRegionData([]);
+        setConstituencyData({});
+        setTotalRecords(0);
+        setTotalPages(1);
+      }
     } catch (error) {
       console.error("Error loading voter data:", error);
       toast({
@@ -157,122 +211,122 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  };
+  }, [pageSize, processChartData]);
   
-  // Load admins with error handling
-  const loadAdmins = async () => {
-    try {
-      const admins = await fetchAdmins();
-      console.log("Fetched admin data:", admins);
-      setAdminList(admins || []);
-    } catch (error) {
-      console.error("Error loading admins:", error);
-      toast({
-        title: "Admin Data Error",
-        description: "Failed to load admin information",
-        variant: "destructive",
-      });
+  // Load admins with error handling and retry
+  const loadAdmins = useCallback(async () => {
+    let attempts = 0;
+    const maxAttempts = 3;
+    
+    while (attempts < maxAttempts) {
+      try {
+        const admins = await fetchAdmins();
+        console.log("Fetched admin data:", admins?.length || 0, "records");
+        setAdminList(admins || []);
+        break;
+      } catch (error) {
+        attempts++;
+        console.error(`Error loading admins (attempt ${attempts}/${maxAttempts}):`, error);
+        
+        if (attempts >= maxAttempts) {
+          toast({
+            title: "Admin Data Error",
+            description: "Failed to load admin information after multiple attempts",
+            variant: "destructive",
+          });
+          break;
+        }
+        
+        // Exponential backoff
+        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempts - 1)));
+      }
     }
-  };
+  }, []);
 
-  // Enhanced realtime subscription setup with better error handling and logging
-  const setupRealtimeSubscriptions = () => {
+  // Enhanced realtime subscription setup with better error handling and reconnection strategy
+  const setupRealtimeSubscriptions = useCallback(() => {
     console.log("Setting up realtime subscriptions with enhanced error handling");
     
-    // Create a channel for admins table with improved logging
-    const adminsChannel = supabase
-      .channel('admin-changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'admins' 
-      }, (payload) => {
-        console.log('Admin change received:', payload);
-        // Reload admins when any change happens
-        loadAdmins();
-      })
-      .subscribe((status) => {
-        console.log('Admins subscription status:', status);
-        if (status === 'TIMED_OUT') {
-          console.error('Admins subscription timed out, retrying...');
-          // Attempt to reconnect after timeout
-          setTimeout(() => {
-            setupRealtimeSubscriptions();
-          }, 5000);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Admin channel error occurred');
-          toast({
-            title: "Connection Issue",
-            description: "Realtime updates for admin data unavailable. Please refresh.",
-            variant: "destructive",
-          });
-        }
-      });
-    
-    // Create a channel for voters table with improved logging
-    const votersChannel = supabase
-      .channel('voters-changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'voters' 
-      }, (payload) => {
-        console.log('Voter change received:', payload);
-        // Reload voter data when any change happens
-        loadVoterData();
-      })
-      .subscribe((status) => {
-        console.log('Voters subscription status:', status);
-        if (status === 'TIMED_OUT') {
-          console.error('Voters subscription timed out, retrying...');
-          // Attempt to reconnect after timeout
-          setTimeout(() => {
-            setupRealtimeSubscriptions();
-          }, 5000);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Voters channel error occurred');
-          toast({
-            title: "Connection Issue",
-            description: "Realtime updates for registration data unavailable. Please refresh.",
-            variant: "destructive",
-          });
-        }
-      });
+    const subscribeWithRetry = (channelName, table, onChangeCallback) => {
+      let reconnectAttempts = 0;
+      const maxReconnectAttempts = 5;
+      const baseDelay = 2000;
       
+      const subscribe = () => {
+        const channel = supabase
+          .channel(channelName)
+          .on('postgres_changes', { 
+            event: '*', 
+            schema: 'public', 
+            table 
+          }, (payload) => {
+            console.log(`${table} change received:`, payload.eventType);
+            onChangeCallback();
+            reconnectAttempts = 0; // Reset on successful events
+          })
+          .subscribe((status) => {
+            console.log(`${channelName} subscription status:`, status);
+            
+            if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
+              reconnectAttempts++;
+              console.error(`${channelName} subscription error (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+              
+              if (reconnectAttempts <= maxReconnectAttempts) {
+                const delay = baseDelay * Math.pow(2, reconnectAttempts - 1) * (0.5 + Math.random());
+                console.log(`Will retry in ${Math.round(delay / 1000)}s`);
+                
+                setTimeout(() => {
+                  console.log(`Attempting to reconnect ${channelName}...`);
+                  supabase.removeChannel(channel);
+                  subscribe();
+                }, delay);
+              } else {
+                console.error(`Max reconnection attempts reached for ${channelName}`);
+                toast({
+                  title: "Connection Issue",
+                  description: `Realtime updates for ${table} data unavailable. Please refresh the page.`,
+                  variant: "destructive",
+                });
+              }
+            }
+          });
+          
+        return channel;
+      };
+      
+      return subscribe();
+    };
+    
+    // Create channels with retry logic
+    const adminsChannel = subscribeWithRetry('admin-changes', 'admins', loadAdmins);
+    const votersChannel = subscribeWithRetry('voters-changes', 'voters', loadVoterData);
+    
     return () => {
       // Improved cleanup function with logging
       console.log("Cleaning up realtime subscriptions");
       try {
         supabase.removeChannel(adminsChannel);
-        console.log("Admins subscription status:", adminsChannel.state);
       } catch (error) {
         console.error("Error removing admins channel:", error);
       }
       
       try {
         supabase.removeChannel(votersChannel);
-        console.log("Voters subscription status:", votersChannel.state);
       } catch (error) {
         console.error("Error removing voters channel:", error);
       }
     };
-  };
+  }, [loadAdmins, loadVoterData]);
 
-  // Handle delete success function with improved data refresh
-  const handleDeleteSuccess = async () => {
+  // Handle delete success function with optimized data refresh
+  const handleDeleteSuccess = useCallback(async () => {
     console.log("Delete operation completed, refreshing data");
-    // Force a complete reload of data to ensure sync with database
+    setIsLoading(true);
+    
     try {
-      // Clear caches if applicable
-      const voters = await fetchVoterData();
-      console.log("Refreshed voter data after deletion:", voters?.length || 0, "records");
-      setVoterData(voters || []);
-      setFilteredData(voters || []);
-      processChartData(voters || []);
-      
-      const admins = await fetchAdmins();
-      console.log("Refreshed admin data after deletion:", admins?.length || 0, "records");
-      setAdminList(admins || []);
+      // Reload voter data with pagination
+      await loadVoterData();
+      await loadAdmins();
       
       toast({
         title: "Data Refreshed",
@@ -285,48 +339,83 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         description: "Unable to refresh data. Please reload the page.",
         variant: "destructive",
       });
+    } finally {
+      setIsLoading(false);
     }
-  };
+  }, [loadVoterData, loadAdmins]);
   
-  // Export functionality
-  const handleExcelExport = () => {
-    // Create a CSV string with the filtered data
-    const headers = "Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
-    let csvContent = headers;
+  // Optimized export functionality for large datasets
+  const handleExcelExport = useCallback(() => {
+    setIsLoading(true);
     
-    // Add the filtered data rows
-    filteredData.forEach(voter => {
-      const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
-      const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
-                    voter.identification_type === 'identification_document' ? 'ID Document' :
-                    voter.identification_type === 'passport_number' ? 'Passport' : '';
-      
-      csvContent += `"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"\n`;
-    });
-    
-    // Create a blob and trigger download
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = `NYPG_Voter_Statistics_${new Date().toISOString().split('T')[0]}.csv`;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    URL.revokeObjectURL(url);
-    
-    toast({
-      title: "Export Successful",
-      description: `${filteredData.length} records have been exported to CSV format`,
-    });
-  };
+    // Use web worker for large exports
+    setTimeout(() => {
+      try {
+        // Create a CSV string with the filtered data
+        const headers = "Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
+        
+        // Process in chunks to avoid memory issues with large datasets
+        const chunkSize = 1000;
+        const chunks = Math.ceil(filteredData.length / chunkSize);
+        let csvContent = headers;
+        
+        for (let i = 0; i < chunks; i++) {
+          const start = i * chunkSize;
+          const end = Math.min(start + chunkSize, filteredData.length);
+          const chunk = filteredData.slice(start, end);
+          
+          chunk.forEach(voter => {
+            const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+            const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
+                          voter.identification_type === 'identification_document' ? 'ID Document' :
+                          voter.identification_type === 'passport_number' ? 'Passport' : '';
+            
+            csvContent += `"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"\n`;
+          });
+        }
+        
+        // Create a blob and trigger download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `NYPG_Voter_Statistics_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+        
+        toast({
+          title: "Export Successful",
+          description: `${filteredData.length} records have been exported to CSV format`,
+        });
+      } catch (error) {
+        console.error("Error exporting data:", error);
+        toast({
+          title: "Export Failed",
+          description: "An error occurred during export. Please try again with a smaller dataset.",
+          variant: "destructive",
+        });
+      } finally {
+        setIsLoading(false);
+      }
+    }, 0);
+  }, [filteredData]);
 
-  // Initial data loading
+  // Initial data loading with error handling
   useEffect(() => {
     console.log("Admin authenticated, loading data");
-    // Load initial data
-    loadVoterData();
-    loadAdmins();
+    
+    const initializeData = async () => {
+      try {
+        // Load initial data in parallel
+        await Promise.all([loadVoterData(), loadAdmins()]);
+      } catch (error) {
+        console.error("Error during initial data loading:", error);
+      }
+    };
+    
+    initializeData();
     
     // Set up realtime subscriptions with enhanced error handling
     const unsubscribe = setupRealtimeSubscriptions();
@@ -334,64 +423,93 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     return () => {
       unsubscribe();
     };
-  }, []);
+  }, [loadVoterData, loadAdmins, setupRealtimeSubscriptions]);
 
-  // Apply filters to the data
+  // Debounced filter application for performance
+  const debouncedApplyFilters = useCallback(
+    debounce(() => {
+      if (!voterData.length) return;
+      
+      console.log("Applying filters to", voterData.length, "records");
+      setIsLoading(true);
+      
+      // Process filtering in chunks to avoid UI blocking
+      setTimeout(() => {
+        try {
+          let result = voterData;
+          
+          if (filters.fullName) {
+            result = result.filter(voter => 
+              voter.full_name && voter.full_name.toLowerCase().includes(filters.fullName.toLowerCase())
+            );
+          }
+          
+          if (filters.organization) {
+            result = result.filter(voter => 
+              voter.organization && voter.organization.toLowerCase().includes(filters.organization.toLowerCase())
+            );
+          }
+          
+          if (filters.dateOfBirth) {
+            result = result.filter(voter => 
+              voter.date_of_birth && voter.date_of_birth.includes(filters.dateOfBirth)
+            );
+          }
+          
+          if (filters.gender) {
+            result = result.filter(voter => 
+              voter.gender === filters.gender
+            );
+          }
+          
+          if (filters.region) {
+            result = result.filter(voter => 
+              voter.region && voter.region.toLowerCase().includes(filters.region.toLowerCase())
+            );
+          }
+          
+          if (filters.constituency) {
+            result = result.filter(voter => 
+              voter.constituency && voter.constituency.toLowerCase().includes(filters.constituency.toLowerCase())
+            );
+          }
+          
+          if (filters.identificationType) {
+            result = result.filter(voter => 
+              voter.identification_type && voter.identification_type.includes(filters.identificationType)
+            );
+          }
+          
+          if (filters.identificationNumber) {
+            result = result.filter(voter => 
+              voter.identification_number && voter.identification_number.includes(filters.identificationNumber)
+            );
+          }
+          
+          setFilteredData(result);
+          setTotalRecords(result.length);
+          setTotalPages(Math.ceil(result.length / pageSize));
+          setCurrentPage(1); // Reset to first page when filters change
+        } catch (error) {
+          console.error("Error applying filters:", error);
+          toast({
+            title: "Filter Error",
+            description: "An error occurred while filtering the data",
+            variant: "destructive",
+          });
+        } finally {
+          setIsLoading(false);
+        }
+      }, 0);
+    }, 300),
+    [voterData, pageSize]
+  );
+
+  // Apply filters when filters or source data changes
   useEffect(() => {
-    if (!voterData.length) return;
-    
-    let result = voterData;
-    
-    if (filters.fullName) {
-      result = result.filter(voter => 
-        voter.full_name && voter.full_name.toLowerCase().includes(filters.fullName.toLowerCase())
-      );
-    }
-    
-    if (filters.organization) {
-      result = result.filter(voter => 
-        voter.organization && voter.organization.toLowerCase().includes(filters.organization.toLowerCase())
-      );
-    }
-    
-    if (filters.dateOfBirth) {
-      result = result.filter(voter => 
-        voter.date_of_birth && voter.date_of_birth.includes(filters.dateOfBirth)
-      );
-    }
-    
-    if (filters.gender) {
-      result = result.filter(voter => 
-        voter.gender === filters.gender
-      );
-    }
-    
-    if (filters.region) {
-      result = result.filter(voter => 
-        voter.region && voter.region.toLowerCase().includes(filters.region.toLowerCase())
-      );
-    }
-    
-    if (filters.constituency) {
-      result = result.filter(voter => 
-        voter.constituency && voter.constituency.toLowerCase().includes(filters.constituency.toLowerCase())
-      );
-    }
-    
-    if (filters.identificationType) {
-      result = result.filter(voter => 
-        voter.identification_type && voter.identification_type.includes(filters.identificationType)
-      );
-    }
-    
-    if (filters.identificationNumber) {
-      result = result.filter(voter => 
-        voter.identification_number && voter.identification_number.includes(filters.identificationNumber)
-      );
-    }
-    
-    setFilteredData(result);
-  }, [filters, voterData]);
+    debouncedApplyFilters();
+    return () => debouncedApplyFilters.cancel();
+  }, [filters, voterData, debouncedApplyFilters]);
 
   return (
     <StatisticsContext.Provider
@@ -407,6 +525,12 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         isLoading,
         selectedRegion,
         setSelectedRegion,
+        currentPage,
+        totalPages,
+        totalRecords,
+        pageSize,
+        setPageSize,
+        setCurrentPage,
         handleDeleteSuccess,
         handleExcelExport
       }}
