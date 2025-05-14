@@ -15,6 +15,10 @@ interface GenderChartProps {
 
 const GenderChart: React.FC<GenderChartProps> = ({ genderData, totalCount }) => {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
+  
+  // Calculate the actual sum from chart data to ensure accuracy
+  const calculatedTotal = genderData.reduce((sum, item) => sum + item.value, 0);
+  const displayTotal = totalCount > 0 ? totalCount : calculatedTotal;
 
   return (
     <Card className="p-6">
@@ -37,7 +41,7 @@ const GenderChart: React.FC<GenderChartProps> = ({ genderData, totalCount }) => 
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip formatter={(value) => [`${value} (${((value as number / displayTotal) * 100).toFixed(1)}%)`, 'Registrations']} />
               <Legend />
             </PieChart>
           </ResponsiveContainer>
@@ -48,7 +52,8 @@ const GenderChart: React.FC<GenderChartProps> = ({ genderData, totalCount }) => 
         </div>
       )}
       <div className="mt-4 text-sm text-gray-600">
-        <p>Total Registrations: {totalCount}</p>
+        <p>Total Registrations: {displayTotal}</p>
+        <p className="mt-1">Last updated: {new Date().toLocaleString()}</p>
       </div>
     </Card>
   );

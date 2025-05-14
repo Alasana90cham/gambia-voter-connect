@@ -35,8 +35,11 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
     handleExcelExport
   } = useStatistics();
 
-  // Memoized total counts to avoid recalculation
+  // Ensure we use the actual length from voterData for accurate total count
+  // This prevents the 1000-record limitation issue
   const totalVoters = useMemo(() => voterData.length, [voterData]);
+  
+  // Calculate actual filtered count for accurate display
   const filteredCount = useMemo(() => filteredData.length, [filteredData]);
 
   // Calculate displayed records range

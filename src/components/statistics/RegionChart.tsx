@@ -13,6 +13,9 @@ interface RegionChartProps {
 }
 
 const RegionChart: React.FC<RegionChartProps> = ({ regionData }) => {
+  // Calculate total number of regions and registrations for accurate display
+  const totalRegistrations = regionData.reduce((sum, region) => sum + region.value, 0);
+
   return (
     <Card className="p-6">
       <h2 className="text-xl font-semibold mb-6">Regional Distribution</h2>
@@ -30,7 +33,7 @@ const RegionChart: React.FC<RegionChartProps> = ({ regionData }) => {
             >
               <XAxis dataKey="name" />
               <YAxis />
-              <Tooltip />
+              <Tooltip formatter={(value) => [`${value} (${((value as number / totalRegistrations) * 100).toFixed(1)}%)`, 'Registrations']} />
               <Legend />
               <Bar dataKey="value" name="Registrations" fill="#0067A5" />
             </BarChart>
@@ -43,6 +46,8 @@ const RegionChart: React.FC<RegionChartProps> = ({ regionData }) => {
       )}
       <div className="mt-4 text-sm text-gray-600">
         <p>Total Regions: {regionData.length}</p>
+        <p>Total Registrations: {totalRegistrations}</p>
+        <p className="mt-1">Last updated: {new Date().toLocaleString()}</p>
       </div>
     </Card>
   );

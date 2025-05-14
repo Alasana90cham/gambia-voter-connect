@@ -100,155 +100,93 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   const processChartData = useCallback((voters: any[]) => {
     if (!voters || voters.length === 0) return;
     
-    // Use Map for better performance with large datasets
+    console.log(`Processing chart data for ${voters.length} records`);
+    
+    // Use direct approach for better performance with large datasets
     const genderMap = new Map<string, number>();
     const regionMap = new Map<string, number>();
     const constituencyMap = new Map<string, Map<string, number>>();
     
-    // For very large datasets, use Web Worker or process in chunks
-    const chunkSize = 1000; // Increased chunk size
-    const totalChunks = Math.ceil(voters.length / chunkSize);
-    
-    // Process in smaller batches for better UI responsiveness
-    let currentChunk = 0;
-    
-    const processNextChunk = () => {
-      if (currentChunk >= totalChunks) {
-        // All processing complete, update state
-        finishProcessing();
-        return;
+    // Process all data directly for accurate chart representation
+    voters.forEach(voter => {
+      // Process gender data
+      const gender = voter.gender || 'Unknown';
+      genderMap.set(gender, (genderMap.get(gender) || 0) + 1);
+      
+      // Process region data
+      const region = voter.region || 'Unknown';
+      regionMap.set(region, (regionMap.get(region) || 0) + 1);
+      
+      // Process constituency data
+      const constituency = voter.constituency || 'Unknown';
+      
+      if (!constituencyMap.has(region)) {
+        constituencyMap.set(region, new Map<string, number>());
       }
       
-      const startIdx = currentChunk * chunkSize;
-      const endIdx = Math.min(startIdx + chunkSize, voters.length);
-      
-      // Process this chunk
-      for (let i = startIdx; i < endIdx; i++) {
-        const voter = voters[i];
-        
-        // Process gender data
-        const gender = voter.gender || 'Unknown';
-        genderMap.set(gender, (genderMap.get(gender) || 0) + 1);
-        
-        // Process region data
-        const region = voter.region || 'Unknown';
-        regionMap.set(region, (regionMap.get(region) || 0) + 1);
-        
-        // Process constituency data
-        const constituency = voter.constituency || 'Unknown';
-        
-        if (!constituencyMap.has(region)) {
-          constituencyMap.set(region, new Map<string, number>());
-        }
-        
-        const regionConstituencies = constituencyMap.get(region)!;
-        regionConstituencies.set(constituency, (regionConstituencies.get(constituency) || 0) + 1);
-      }
-      
-      currentChunk++;
-      
-      // Continue processing in next animation frame to avoid UI freezing
-      requestAnimationFrame(processNextChunk);
-    };
+      const regionConstituencies = constituencyMap.get(region)!;
+      regionConstituencies.set(constituency, (regionConstituencies.get(constituency) || 0) + 1);
+    });
     
-    const finishProcessing = () => {
-      // Convert maps to the required format
-      const genderChartData: ChartData[] = Array.from(genderMap.entries()).map(([name, value]) => ({
-        name: name.charAt(0).toUpperCase() + name.slice(1),
-        value
-      }));
-      
-      const regionChartData: ChartData[] = Array.from(regionMap.entries()).map(([name, value]) => ({
+    // Convert maps to required format
+    const genderChartData: ChartData[] = Array.from(genderMap.entries()).map(([name, value]) => ({
+      name: name.charAt(0).toUpperCase() + name.slice(1),
+      value
+    }));
+    
+    const regionChartData: ChartData[] = Array.from(regionMap.entries()).map(([name, value]) => ({
+      name,
+      value
+    }));
+    
+    const constituencyChartData: {[key: string]: ChartData[]} = {};
+    constituencyMap.forEach((constituencies, region) => {
+      constituencyChartData[region] = Array.from(constituencies.entries()).map(([name, value]) => ({
         name,
         value
       }));
-      
-      const constituencyChartData: {[key: string]: ChartData[]} = {};
-      constituencyMap.forEach((constituencies, region) => {
-        constituencyChartData[region] = Array.from(constituencies.entries()).map(([name, value]) => ({
-          name,
-          value
-        }));
-      });
-      
-      setGenderData(genderChartData);
-      setRegionData(regionChartData);
-      setConstituencyData(constituencyChartData);
-    };
+    });
     
-    // Start processing
-    processNextChunk();
+    // Update chart data state
+    setGenderData(genderChartData);
+    setRegionData(regionChartData);
+    setConstituencyData(constituencyChartData);
+    
+    console.log("Chart data processing completed successfully");
   }, []);
 
-  // Improved voter data fetching with chunked processing for large datasets
+  // Improved voter data fetching with direct query and no pagination limit
   const loadVoterData = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      // Fetch data with increased chunk size to handle over 1000 records
-      const fetchAllVoters = async () => {
-        try {
-          // Use direct query with no pagination limit to get all records
-          const { data: allVoters, error, count } = await supabase
-            .from('voters')
-            .select('*', { count: 'exact' })
-            .order('created_at', { ascending: false });
-          
-          if (error) throw error;
-          
-          console.log(`Successfully fetched ${allVoters?.length || 0} voters out of ${count || 0} total records`);
-          
-          if (allVoters && allVoters.length > 0) {
-            // Directly process and return the complete dataset
-            return allVoters;
-          }
-          
-          return [];
-        } catch (error) {
-          console.error("Error in fetchAllVoters:", error);
-          throw error;
-        }
-      };
-
-      // Execute the fetch with increased timeout
-      const timeoutPromise = new Promise((_, reject) => {
-        setTimeout(() => reject(new Error("Fetch operation timed out")), 90000); // 90 seconds timeout
-      });
-
-      // Race between fetch and timeout
-      const voters = await Promise.race([
-        fetchAllVoters(),
-        timeoutPromise
-      ]) as any[];
-
-      console.log("Fetched voter data:", voters?.length || 0, "records");
+      console.log("Starting voter data fetch with no row limit");
       
-      if (voters && voters.length > 0) {
-        setVoterData(voters);
-        setFilteredData(voters);
-        setTotalRecords(voters.length);
-        setTotalPages(Math.ceil(voters.length / pageSize));
+      const { data: allVoters, error, count } = await supabase
+        .from('voters')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        throw error;
+      }
+      
+      const actualCount = count || (allVoters?.length || 0);
+      console.log(`Successfully fetched ${allVoters?.length || 0} voters out of ${actualCount} total records`);
+      
+      if (allVoters && allVoters.length > 0) {
+        setVoterData(allVoters);
+        setFilteredData(allVoters);
+        setTotalRecords(actualCount);
+        setTotalPages(Math.ceil(actualCount / pageSize));
         
-        // For very large datasets, process data in smaller chunks
-        const chunkAndProcess = () => {
-          // Process charts in background to prevent UI blocking
-          setTimeout(() => {
-            try {
-              processChartData(voters);
-              console.log("Chart data processing complete");
-            } catch (err) {
-              console.error("Error processing chart data:", err);
-            }
-          }, 100);
-        };
+        // Process chart data with all records
+        processChartData(allVoters);
         
-        // Start chunked processing
-        chunkAndProcess();
-        
-        if (voters.length > 1000) {
+        if (actualCount > 1000) {
           toast({
             title: "Large Dataset Loaded",
-            description: `Processing ${voters.length} records. Some operations may take longer than usual.`,
+            description: `Successfully processed ${actualCount} records. Charts and tables are now updated.`,
           });
         }
       } else {
@@ -270,7 +208,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, [pageSize, processChartData]);
+  }, [pageSize]);
 
   // Load admins with enhanced error handling and retry
   const loadAdmins = useCallback(async () => {
@@ -302,80 +240,44 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, []);
 
-  // Enhanced realtime subscription setup with optimized reconnection strategy
+  // Enhanced realtime subscription setup to detect new registrations
   const setupRealtimeSubscriptions = useCallback(() => {
-    console.log("Setting up realtime subscriptions with enhanced error handling");
+    console.log("Setting up realtime subscriptions for unlimited data");
     
-    const subscribeWithRetry = (channelName, table, onChangeCallback) => {
-      let reconnectAttempts = 0;
-      const maxReconnectAttempts = 5;
-      const baseDelay = 2000;
+    // Create channel with improved error handling
+    const votersChannel = supabase
+      .channel('voters-changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'voters'
+      }, (payload) => {
+        console.log(`Voter data change detected (${payload.eventType}), refreshing all data`);
+        // Always reload all data to ensure charts reflect current state
+        loadVoterData();
+      })
+      .subscribe((status) => {
+        console.log(`Voters subscription status: ${status}`);
+      });
       
-      const subscribe = () => {
-        const channel = supabase
-          .channel(channelName)
-          .on('postgres_changes', { 
-            event: '*', 
-            schema: 'public', 
-            table 
-          }, (payload) => {
-            console.log(`${table} change received:`, payload.eventType);
-            onChangeCallback();
-            reconnectAttempts = 0; // Reset on successful events
-          })
-          .subscribe((status) => {
-            console.log(`${channelName} subscription status:`, status);
-            
-            if (status === 'TIMED_OUT' || status === 'CHANNEL_ERROR') {
-              reconnectAttempts++;
-              console.error(`${channelName} subscription error (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
-              
-              if (reconnectAttempts <= maxReconnectAttempts) {
-                const delay = baseDelay * Math.pow(2, reconnectAttempts - 1) * (0.5 + Math.random());
-                console.log(`Will retry in ${Math.round(delay / 1000)}s`);
-                
-                setTimeout(() => {
-                  console.log(`Attempting to reconnect ${channelName}...`);
-                  supabase.removeChannel(channel);
-                  subscribe();
-                }, delay);
-              } else {
-                console.error(`Max reconnection attempts reached for ${channelName}`);
-                toast({
-                  title: "Connection Issue",
-                  description: `Realtime updates for ${table} data unavailable. Please refresh the page.`,
-                  variant: "destructive",
-                });
-              }
-            }
-          });
-          
-        return channel;
-      };
-      
-      return subscribe();
-    };
-    
-    // Create channels with retry logic
-    const adminsChannel = subscribeWithRetry('admin-changes', 'admins', loadAdmins);
-    const votersChannel = subscribeWithRetry('voters-changes', 'voters', loadVoterData);
+    // Create channel for admin changes
+    const adminsChannel = supabase
+      .channel('admin-changes')
+      .on('postgres_changes', { 
+        event: '*', 
+        schema: 'public', 
+        table: 'admins'
+      }, (payload) => {
+        console.log(`Admin data change detected (${payload.eventType})`);
+        loadAdmins();
+      })
+      .subscribe();
     
     return () => {
-      // Improved cleanup function with logging
-      console.log("Cleaning up realtime subscriptions");
-      try {
-        supabase.removeChannel(adminsChannel);
-      } catch (error) {
-        console.error("Error removing admins channel:", error);
-      }
-      
-      try {
-        supabase.removeChannel(votersChannel);
-      } catch (error) {
-        console.error("Error removing voters channel:", error);
-      }
+      supabase.removeChannel(votersChannel);
+      supabase.removeChannel(adminsChannel);
     };
-  }, [loadAdmins, loadVoterData]);
+  }, [loadVoterData, loadAdmins]);
 
   // Optimized delete success handler
   const handleDeleteSuccess = useCallback(async () => {
