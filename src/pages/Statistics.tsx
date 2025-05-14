@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -9,6 +8,7 @@ import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
+import { DataIntegrityMonitor } from '@/components/statistics/DataIntegrityMonitor';
 
 // Session timeout in milliseconds (2 hours)
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
@@ -18,6 +18,7 @@ const Statistics = () => {
   const [isInitializing, setIsInitializing] = useState(true);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
+  const [dataRefresh, setDataRefresh] = useState<number>(0);
   const { toast } = useToast();
 
   // Reset the inactivity timer
@@ -267,6 +268,16 @@ const Statistics = () => {
     </div>
   );
 
+  // Handle data recovery
+  const handleDataRecovery = useCallback(() => {
+    // Increment data refresh to trigger reloads of statistics data
+    setDataRefresh(prev => prev + 1);
+    toast({
+      title: "Data Recovered",
+      description: "Statistics updated with recovered data.",
+    });
+  }, [toast]);
+
   // Component rendering based on authentication state
   if (!isAdmin) {
     return (
@@ -277,6 +288,7 @@ const Statistics = () => {
         </main>
         <Footer />
         <ConnectionIndicator />
+        <DataIntegrityMonitor onRecover={handleDataRecovery} />
       </div>
     );
   }
@@ -285,7 +297,7 @@ const Statistics = () => {
     <div className="min-h-screen flex flex-col">
       <Header />
       
-      <StatisticsProvider>
+      <StatisticsProvider key={`stats-provider-${dataRefresh}`}>
         <main className="flex-grow">
           <StatisticsContent onLogout={handleLogout} />
         </main>
@@ -293,6 +305,7 @@ const Statistics = () => {
       
       <Footer />
       <ConnectionIndicator />
+      <DataIntegrityMonitor onRecover={handleDataRecovery} />
     </div>
   );
 };

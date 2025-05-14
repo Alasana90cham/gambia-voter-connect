@@ -12,6 +12,7 @@ import CompleteStep from './steps/CompleteStep';
 import { toast } from '@/components/ui/use-toast';
 import { ArrowLeftIcon, ArrowRightIcon } from 'lucide-react';
 import { submitVoterRegistration } from '@/data/constituencies';
+import { DataIntegrityMonitor } from '@/components/statistics/DataIntegrityMonitor';
 
 interface Props {
   onComplete?: () => void;
@@ -53,6 +54,7 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
   const [formData, setFormData] = useState<VoterFormData>(initialFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const currentStepIndex = steps.indexOf(currentStep);
+  const [needsRefresh, setNeedsRefresh] = useState<boolean>(false);
 
   const updateFormData = useCallback((data: Partial<VoterFormData>) => {
     setFormData(prev => ({ ...prev, ...data }));
@@ -145,6 +147,14 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
     setCurrentStep('declaration');
   };
 
+  const handleDataRecovery = useCallback(() => {
+    setNeedsRefresh(true);
+    // If we're on the complete step, trigger the onComplete callback
+    if (currentStep === 'complete' && onComplete) {
+      onComplete();
+    }
+  }, [currentStep, onComplete]);
+
   const renderCurrentStep = () => {
     switch (currentStep) {
       case 'declaration':
@@ -231,6 +241,9 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
           </div>
         )}
       </div>
+      
+      {/* Add Data Integrity Monitor */}
+      <DataIntegrityMonitor onRecover={handleDataRecovery} />
     </Card>
   );
 };
