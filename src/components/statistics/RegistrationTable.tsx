@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -15,6 +16,7 @@ import {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
+  generatePaginationItems
 } from "@/components/ui/pagination";
 import { NoDataRow, formatForExport } from './RegistrationTableHelpers';
 
@@ -55,6 +57,12 @@ interface RegistrationTableProps {
   onUpdateFilters: (filters: FilterState) => void;
   filters: FilterState;
   onDeleteSuccess?: () => void; // Prop to trigger parent refresh
+  currentPage?: number;
+  totalPages?: number;
+  pageSize?: number;
+  setPageSize?: (size: number) => void;
+  setCurrentPage?: (page: number) => void;
+  isLoading?: boolean;
 }
 
 const RegistrationTable: React.FC<RegistrationTableProps> = ({
@@ -64,22 +72,37 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   constituencyData,
   onUpdateFilters,
   filters,
-  onDeleteSuccess
+  onDeleteSuccess,
+  currentPage: propCurrentPage,
+  totalPages: propTotalPages,
+  pageSize: propPageSize,
+  setPageSize: propSetPageSize,
+  setCurrentPage: propSetCurrentPage,
+  isLoading: propIsLoading
 }) => {
   const tableRef = useRef<HTMLDivElement>(null);
   const [selectedRows, setSelectedRows] = useState<string[]>([]);
   const [localData, setLocalData] = useState<VoterData[]>(filteredData);
+  
+  // Use props or local state for pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isPageChanging, setIsPageChanging] = useState(false);
+  const [recordsPerPage, setRecordsPerPage] = useState(100);
+  
+  // Determine whether to use local or prop-based pagination
+  const useLocalPagination = !propCurrentPage && !propSetCurrentPage;
+  const effectiveCurrentPage = useLocalPagination ? currentPage : propCurrentPage || 1;
+  const effectiveSetCurrentPage = useLocalPagination ? setCurrentPage : propSetCurrentPage || setCurrentPage;
+  const effectivePageSize = useLocalPagination ? recordsPerPage : propPageSize || 100;
+  const effectiveSetPageSize = useLocalPagination ? setRecordsPerPage : propSetPageSize || setRecordsPerPage;
+  const isLoading = propIsLoading || false;
   
   // Update local data when filteredData changes
   useEffect(() => {
     setLocalData(filteredData);
   }, [filteredData]);
   
-  // Improved pagination state with more feedback
-  const [currentPage, setCurrentPage] = useState(1);
-  const [isPageChanging, setIsPageChanging] = useState(false);
-  const recordsPerPage = 100;
-  
+  // Filter handling functions
   const handleFilterChange = (field: keyof FilterState, value: string) => {
     onUpdateFilters({
       ...filters,
@@ -221,19 +244,19 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }
   };
   
-  // Enhanced pagination logic with animation feedback
-  const indexOfLastRecord = currentPage * recordsPerPage;
-  const indexOfFirstRecord = indexOfLastRecord - recordsPerPage;
+  // Optimized pagination for large datasets
+  const indexOfLastRecord = effectiveCurrentPage * effectivePageSize;
+  const indexOfFirstRecord = indexOfLastRecord - effectivePageSize;
   const paginatedData = localData.slice(indexOfFirstRecord, indexOfLastRecord);
   
-  const totalPages = Math.ceil(localData.length / recordsPerPage);
+  const totalPages = Math.ceil(localData.length / effectivePageSize);
   
   // Improved page change handler with animation
   const changePage = (newPage: number) => {
-    if (newPage < 1 || newPage > totalPages || newPage === currentPage) return;
+    if (newPage < 1 || newPage > totalPages || newPage === effectiveCurrentPage) return;
     
     setIsPageChanging(true);
-    setCurrentPage(newPage);
+    effectiveSetCurrentPage(newPage);
     
     // Add slight delay for visual feedback
     setTimeout(() => {
@@ -241,58 +264,18 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }, 300);
   };
   
-  // Generate page numbers for pagination with enhanced visibility
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxDisplayedPages = 5;
-    
-    if (totalPages <= maxDisplayedPages) {
-      // If we have 5 or fewer pages, show all page numbers
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
-    } else {
-      // Handle case with more than 5 pages
-      if (currentPage <= 3) {
-        // Near the start
-        for (let i = 1; i <= 4; i++) {
-          pages.push(i);
-        }
-        pages.push('ellipsis');
-        pages.push(totalPages);
-      } else if (currentPage >= totalPages - 2) {
-        // Near the end
-        pages.push(1);
-        pages.push('ellipsis');
-        for (let i = totalPages - 3; i <= totalPages; i++) {
-          pages.push(i);
-        }
-      } else {
-        // Somewhere in the middle
-        pages.push(1);
-        pages.push('ellipsis');
-        pages.push(currentPage - 1);
-        pages.push(currentPage);
-        pages.push(currentPage + 1);
-        pages.push('ellipsis');
-        pages.push(totalPages);
-      }
-    }
-    
-    return pages;
-  };
+  // Use the new generatePaginationItems function for better pagination with large datasets
+  const pageNumbers = generatePaginationItems(effectiveCurrentPage, totalPages);
   
-  const pageNumbers = getPageNumbers();
-
   // Reset to first page when filters change
   useEffect(() => {
-    setCurrentPage(1);
-  }, [filters]);
+    effectiveSetCurrentPage(1);
+  }, [filters, effectiveSetCurrentPage]);
   
   // Reset selected rows when page changes or data changes
   useEffect(() => {
     setSelectedRows([]);
-  }, [currentPage, localData]);
+  }, [effectiveCurrentPage, localData]);
   
   // Set up real-time subscription for deleted rows with privacy protection
   useEffect(() => {
@@ -334,6 +317,20 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       }
     };
   }, []);
+  
+  // Additional data loading indicator for large datasets
+  const renderLoadingState = () => {
+    if (!isLoading) return null;
+    
+    return (
+      <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10">
+        <div className="flex flex-col items-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+          <div className="mt-4 text-lg">Processing data...</div>
+        </div>
+      </div>
+    );
+  };
 
   // Updated VoterRow component - with no selection checkbox
   const VoterRow = ({ voter }) => {
@@ -355,9 +352,13 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
       </TableRow>
     );
   };
+  
+  // Page size options for large datasets
+  const pageSizeOptions = [50, 100, 250, 500, 1000];
 
   return (
-    <Card className="p-6 mb-8">
+    <Card className="p-6 mb-8 relative">
+      {renderLoadingState()}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
         <h2 className="text-xl font-semibold">Registration Data</h2>
         <div className="flex flex-wrap items-center gap-2">
@@ -499,14 +500,35 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         </Table>
       </div>
       
+      {/* Page size selector */}
+      <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center space-x-2">
+          <span className="text-sm">Rows per page:</span>
+          <select 
+            className="h-8 rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background"
+            value={effectivePageSize}
+            onChange={(e) => effectiveSetPageSize(Number(e.target.value))}
+          >
+            {pageSizeOptions.map(size => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
+        </div>
+        
+        <div className="text-sm text-gray-600">
+          Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, localData.length)} of {localData.length} registrations
+          {localData.length !== voterData.length && ` (filtered from ${voterData.length} total)`}
+        </div>
+      </div>
+      
       {/* Enhanced pagination controls with better state feedback */}
       {totalPages > 1 && (
         <Pagination className="mt-4">
           <PaginationContent>
             <PaginationItem>
               <PaginationPrevious 
-                onClick={() => changePage(currentPage - 1)}
-                className={currentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                onClick={() => changePage(effectiveCurrentPage - 1)}
+                className={effectiveCurrentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
               />
             </PaginationItem>
             
@@ -518,12 +540,12 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
               ) : (
                 <PaginationItem key={pageNumber}>
                   <PaginationLink
-                    isActive={currentPage === pageNumber}
+                    isActive={effectiveCurrentPage === pageNumber}
                     onClick={() => changePage(pageNumber as number)}
                     className={`cursor-pointer transition-all ${
                       isPageChanging ? 'bg-opacity-70' : ''
                     }`}
-                    aria-current={currentPage === pageNumber ? 'page' : undefined}
+                    aria-current={effectiveCurrentPage === pageNumber ? 'page' : undefined}
                   >
                     {pageNumber}
                   </PaginationLink>
@@ -533,20 +555,13 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
             
             <PaginationItem>
               <PaginationNext 
-                onClick={() => changePage(currentPage + 1)}
-                className={currentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+                onClick={() => changePage(effectiveCurrentPage + 1)}
+                className={effectiveCurrentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
               />
             </PaginationItem>
           </PaginationContent>
         </Pagination>
       )}
-      
-      <div className="mt-4 text-sm text-gray-600">
-        <p>
-          Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, localData.length)} of {localData.length} registrations
-          {localData.length !== voterData.length && ` (filtered from ${voterData.length} total)`}
-        </p>
-      </div>
     </Card>
   );
 };

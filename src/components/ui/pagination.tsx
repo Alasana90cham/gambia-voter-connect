@@ -1,3 +1,4 @@
+
 import * as React from "react"
 import { ChevronLeft, ChevronRight, MoreHorizontal } from "lucide-react"
 
@@ -106,6 +107,41 @@ const PaginationEllipsis = ({
 )
 PaginationEllipsis.displayName = "PaginationEllipsis"
 
+// New function to generate optimized pagination range for large datasets
+const generatePaginationItems = (currentPage: number, totalPages: number) => {
+  // Always show first and last page
+  // For other pages, show a window around current page and use ellipsis
+  const items: (number | string)[] = [];
+  
+  if (totalPages <= 7) {
+    // If 7 or fewer pages, show all
+    for (let i = 1; i <= totalPages; i++) {
+      items.push(i);
+    }
+  } else {
+    // Always show first page
+    items.push(1);
+    
+    // Calculate the window around current page
+    if (currentPage <= 3) {
+      items.push(2, 3, 4, "ellipsis", totalPages - 1, totalPages);
+    } else if (currentPage >= totalPages - 2) {
+      items.push("ellipsis", totalPages - 3, totalPages - 2, totalPages - 1, totalPages);
+    } else {
+      items.push(
+        "ellipsis",
+        currentPage - 1,
+        currentPage,
+        currentPage + 1,
+        "ellipsis",
+        totalPages
+      );
+    }
+  }
+  
+  return items;
+}
+
 export {
   Pagination,
   PaginationContent,
@@ -114,4 +150,5 @@ export {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
+  generatePaginationItems
 }

@@ -6,14 +6,14 @@ enabled = true
 port = 54321
 schemas = ["public", "storage"]
 extra_search_path = ["public", "extensions"]
-max_rows = 10000
+max_rows = 100000
 
 [db]
 port = 54322
 shadow_port = 54320
 major_version = 15
 pool_mode = "transaction"
-pool_size = 20
+pool_size = 50
 
 [studio]
 enabled = true
@@ -34,4 +34,3 @@ refresh_token_reuse_interval = 10
 
 [realtime]
 enabled = true
-
