@@ -2,7 +2,7 @@
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { randomUUID } from "crypto";
+import { uniqueId } from "@/lib/utils";
 
 // Export region constituencies data that we'll serve statically
 export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
@@ -396,7 +396,7 @@ export const submitVoterRegistration = async (formData: VoterFormData) => {
     };
     
     // Store backup locally first in case of connectivity issues
-    const submissionId = randomUUID ? randomUUID() : Date.now().toString();
+    const submissionId = uniqueId('submission_');
     const backupKey = `voter_submission_${submissionId}`;
     try {
       localStorage.setItem(backupKey, JSON.stringify({
@@ -453,3 +453,4 @@ export const submitVoterRegistration = async (formData: VoterFormData) => {
     throw error;
   }
 };
+

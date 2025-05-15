@@ -1,3 +1,4 @@
+
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
 
@@ -82,9 +83,11 @@ export function throttle<T extends (...args: any[]) => any>(
   };
 }
 
-// Generate unique ID
+// Generate unique ID - Enhanced to be more robust with multiple sources of entropy
 export function uniqueId(prefix = ''): string {
-  return `${prefix}${Math.random().toString(36).substring(2, 11)}`;
+  const timestamp = Date.now().toString(36);
+  const randomStr = Math.random().toString(36).substring(2, 10);
+  return `${prefix}${timestamp}${randomStr}`;
 }
 
 // Format date to a human-readable string (YYYY-MM-DD)
@@ -103,3 +106,4 @@ export const formatDate = (dateString: string | Date): string => {
   
   return `${year}-${month}-${day}`;
 };
+
