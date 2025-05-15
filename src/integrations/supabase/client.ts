@@ -1,3 +1,4 @@
+
 import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL || '';
@@ -68,7 +69,7 @@ export async function fetchPaginated(
         .limit(limit);
       
       if (nextError) {
-        console.error(`Error fetching page ${page ${page + 1}: ${nextError.message}`);
+        console.error(`Error fetching page ${page + 1}: ${nextError.message}`);
         throw nextError;
       }
       
