@@ -5,9 +5,49 @@ import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 
 const Index = () => {
-  // Prevent sensitive data from leaking to console
+  // Implement optimized console handling for mobile devices
   React.useEffect(() => {
-    // Override console methods to avoid logging sensitive data
+    // Check if we're on a mobile device - this improves iOS compatibility
+    const isMobileDevice = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+    
+    if (isMobileDevice) {
+      // Simplified console handling for mobile devices to avoid memory issues
+      const originalConsoleLog = console.log;
+      const originalConsoleError = console.error;
+      const originalConsoleWarn = console.warn;
+      const originalConsoleInfo = console.info;
+      
+      // Use more lightweight sanitization for mobile devices
+      console.log = function(...args) {
+        const safeArgs = args.map(arg => typeof arg === 'object' && arg !== null ? '[Object]' : arg);
+        originalConsoleLog.apply(console, safeArgs);
+      };
+      
+      console.error = function(...args) {
+        const safeArgs = args.map(arg => typeof arg === 'object' && arg !== null ? '[Error Object]' : arg);
+        originalConsoleError.apply(console, safeArgs);
+      };
+      
+      console.warn = function(...args) {
+        const safeArgs = args.map(arg => typeof arg === 'object' && arg !== null ? '[Warning Object]' : arg);
+        originalConsoleWarn.apply(console, safeArgs);
+      };
+      
+      console.info = function(...args) {
+        const safeArgs = args.map(arg => typeof arg === 'object' && arg !== null ? '[Info Object]' : arg);
+        originalConsoleInfo.apply(console, safeArgs);
+      };
+      
+      return () => {
+        console.log = originalConsoleLog;
+        console.error = originalConsoleError;
+        console.warn = originalConsoleWarn;
+        console.info = originalConsoleInfo;
+      };
+    }
+    
+    // For non-mobile devices, use the existing console overrides
+    // Original console overriding code with sanitization for sensitive data
     const originalConsoleLog = console.log;
     const originalConsoleError = console.error;
     const originalConsoleWarn = console.warn;

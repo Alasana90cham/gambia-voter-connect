@@ -1,8 +1,8 @@
 
 // Service Worker for caching and offline support
-const CACHE_NAME = 'nypg-voter-cache-v3';
-const STATIC_CACHE = 'nypg-static-cache-v3';
-const DYNAMIC_CACHE = 'nypg-dynamic-cache-v3';
+const CACHE_NAME = 'nypg-voter-cache-v4';
+const STATIC_CACHE = 'nypg-static-cache-v4';
+const DYNAMIC_CACHE = 'nypg-dynamic-cache-v4';
 
 // Assets to cache immediately on install
 const urlsToCache = [
@@ -10,6 +10,9 @@ const urlsToCache = [
   '/index.html',
   '/manifest.json',
 ];
+
+// iOS Safari requires special handling for service workers
+const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
 
 // Install the service worker and cache core assets
 self.addEventListener('install', event => {
@@ -34,7 +37,7 @@ self.addEventListener('install', event => {
   );
 });
 
-// Enhanced network-first strategy with improved cache fallback
+// Enhanced network-first strategy with improved cache fallback and iOS optimizations
 self.addEventListener('fetch', event => {
   // Skip cross-origin requests, non-HTTP/HTTPS, and extension requests
   if (!event.request.url.startsWith(self.location.origin) || 
@@ -77,10 +80,34 @@ async function cacheFirstStrategy(request) {
   }
 }
 
-// Network-first strategy implementation
+// Network-first strategy implementation with iOS optimizations
 async function networkFirstStrategy(request) {
   try {
-    return await fetchAndCache(request);
+    // On iOS, use a more reliable timeout pattern
+    if (typeof navigator !== 'undefined' && /iPhone|iPad|iPod/.test(navigator.userAgent)) {
+      const timeoutPromise = new Promise((_, reject) => {
+        setTimeout(() => reject(new Error('Network request timed out')), 5000);
+      });
+      
+      const fetchPromise = fetch(request);
+      const response = await Promise.race([fetchPromise, timeoutPromise])
+        .catch(() => {
+          console.log('[ServiceWorker] Fetch timed out, falling back to cache');
+          return caches.match(request);
+        });
+        
+      if (response) {
+        if (response.status === 200) {
+          const responseClone = response.clone();
+          const cache = await caches.open(DYNAMIC_CACHE);
+          cache.put(request, responseClone);
+        }
+        return response;
+      }
+    } else {
+      // Standard approach for other platforms
+      return await fetchAndCache(request);
+    }
   } catch (error) {
     console.log('[ServiceWorker] Fetch failed, falling back to cache:', error);
     const cachedResponse = await caches.match(request);
@@ -94,22 +121,33 @@ async function networkFirstStrategy(request) {
   }
 }
 
-// Helper function to fetch and cache responses
+// Helper function to fetch and cache responses with timeout for reliability
 async function fetchAndCache(request) {
-  const response = await fetch(request);
-  
-  // Only cache valid responses
-  if (response.status === 200) {
-    try {
-      const responseClone = response.clone();
-      const cache = await caches.open(DYNAMIC_CACHE);
-      cache.put(request, responseClone);
-    } catch (err) {
-      console.error('[ServiceWorker] Cache put error:', err);
+  // Use AbortController with timeout for better reliability
+  const controller = new AbortController();
+  const signal = controller.signal;
+  const timeoutId = setTimeout(() => controller.abort(), 10000);
+
+  try {
+    const response = await fetch(request, { signal });
+    clearTimeout(timeoutId);
+    
+    // Only cache valid responses
+    if (response.status === 200) {
+      try {
+        const responseClone = response.clone();
+        const cache = await caches.open(DYNAMIC_CACHE);
+        cache.put(request, responseClone);
+      } catch (err) {
+        console.error('[ServiceWorker] Cache put error:', err);
+      }
     }
+    
+    return response;
+  } catch (err) {
+    clearTimeout(timeoutId);
+    throw err;
   }
-  
-  return response;
 }
 
 // Clean up old caches when a new service worker is activated
@@ -133,7 +171,7 @@ self.addEventListener('activate', event => {
   );
 });
 
-// Handle service worker updates
+// Handle service worker updates with Safari compatibility
 self.addEventListener('message', event => {
   if (event.data === 'SKIP_WAITING') {
     self.skipWaiting();

@@ -1,3 +1,4 @@
+
 import { createRoot } from 'react-dom/client'
 import App from './App.tsx'
 import './index.css'
@@ -18,24 +19,38 @@ const registerServiceWorker = () => {
   }
 };
 
-// Create an optimized query client with high-performance settings
+// Detect browser for platform-specific optimizations
+const detectBrowser = () => {
+  const ua = window.navigator.userAgent;
+  const iOS = !!ua.match(/iPad/i) || !!ua.match(/iPhone/i);
+  const webkit = !!ua.match(/WebKit/i);
+  const iOSSafari = iOS && webkit && !ua.match(/CriOS/i) && !ua.match(/FxiOS/i);
+  const isAndroid = ua.indexOf('Android') > -1;
+  
+  return {
+    iOSSafari,
+    isAndroid,
+    isMobile: iOS || isAndroid
+  };
+};
+
+// Create an optimized query client with platform-specific settings
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       staleTime: 5 * 60 * 1000, // 5 minutes - increase cache lifetime
       gcTime: 30 * 60 * 1000, // 30 minutes - keep garbage collection infrequent
-      retry: 3,
+      retry: detectBrowser().iOSSafari ? 5 : 3, // More retries for iOS Safari
       networkMode: 'online',
       refetchOnWindowFocus: import.meta.env.PROD ? false : true,
       refetchOnMount: true,
       refetchOnReconnect: 'always',
       retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 30000),
-      // Removed keepPreviousData as it's not supported in the current version
       structuralSharing: false, // Disable structural sharing for large objects
     },
     mutations: {
       networkMode: 'online',
-      retry: 2,
+      retry: detectBrowser().iOSSafari ? 4 : 2,
       retryDelay: attemptIndex => Math.min(1000 * 2 ** attemptIndex, 15000)
     }
   }
@@ -51,8 +66,14 @@ if (import.meta.env.DEV) {
   };
 }
 
-// Performance monitoring
+// Cross-platform performance monitoring
 const setupPerformanceMonitoring = () => {
+  // Skip heavy monitoring on iOS devices
+  if (detectBrowser().iOSSafari) {
+    console.log('Limited performance monitoring for iOS Safari');
+    return;
+  }
+
   if ('PerformanceObserver' in window) {
     // Monitor large layout shifts
     const layoutShiftObserver = new PerformanceObserver((list) => {
@@ -110,8 +131,13 @@ const initApp = () => {
   }
 };
 
-// Execute initialization with optimization for large apps
-if (document.readyState === 'loading') {
+// Platform-optimized execution
+const browser = detectBrowser();
+if (browser.iOSSafari) {
+  // iOS needs immediate execution for reliable startup
+  initApp();
+} else if (document.readyState === 'loading') {
+  // For other platforms, use standard optimization pattern
   document.addEventListener('DOMContentLoaded', () => {
     requestIdleCallback ? requestIdleCallback(initApp) : setTimeout(initApp, 1);
   });
@@ -124,12 +150,25 @@ if (import.meta.env.PROD) {
   registerServiceWorker();
 }
 
-// Add memory management for large datasets
+// Add platform-appropriate memory management
 if ('performance' in window && 'memory' in performance) {
+  const memoryCheckInterval = browser.iOSSafari ? 60000 : 30000; // Less frequent checks on iOS
   setInterval(() => {
     const memoryInfo = (performance as any).memory;
     if (memoryInfo && memoryInfo.usedJSHeapSize > 0.8 * memoryInfo.jsHeapSizeLimit) {
       console.warn('High memory usage detected. Consider optimizing data handling.');
     }
-  }, 30000); // Check every 30 seconds
+  }, memoryCheckInterval);
+}
+
+// Add iOS Safari specific fixes
+if (browser.iOSSafari) {
+  // Fix for iOS height calculation issues with 100vh
+  const fixIOSHeight = () => {
+    const vh = window.innerHeight * 0.01;
+    document.documentElement.style.setProperty('--vh', `${vh}px`);
+  };
+  
+  window.addEventListener('resize', fixIOSHeight);
+  fixIOSHeight();
 }
