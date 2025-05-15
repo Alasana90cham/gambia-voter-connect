@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { RegistrationTableProps } from './RegistrationTableProps';
 import { Button } from "@/components/ui/button";
@@ -266,6 +267,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
           <Table>
             <TableHeader>
               <TableRow>
+                <TableHead className="w-14">No.</TableHead>
                 <TableHead>Full Name</TableHead>
                 <TableHead>Organization</TableHead>
                 <TableHead>Date of Birth</TableHead>
@@ -274,7 +276,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                 <TableHead>Constituency</TableHead>
                 <TableHead>ID Type</TableHead>
                 <TableHead>ID Number</TableHead>
-                <TableHead>Registration Date</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -291,8 +292,11 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                 ))
               ) : visibleData.length > 0 ? (
                 // Actual data rows
-                visibleData.map((voter) => (
+                visibleData.map((voter, index) => (
                   <TableRow key={voter.id}>
+                    <TableCell className="font-medium text-center">
+                      {voter.rowNumber || ((currentPage - 1) * pageSize + index + 1)}
+                    </TableCell>
                     <TableCell className="font-medium">{voter.full_name}</TableCell>
                     <TableCell>{voter.organization}</TableCell>
                     <TableCell>{voter.date_of_birth}</TableCell>
@@ -305,7 +309,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                     <TableCell>{voter.constituency}</TableCell>
                     <TableCell>{voter.identification_type}</TableCell>
                     <TableCell>{voter.identification_number}</TableCell>
-                    <TableCell>{formatDate(voter.created_at)}</TableCell>
                   </TableRow>
                 ))
               ) : (

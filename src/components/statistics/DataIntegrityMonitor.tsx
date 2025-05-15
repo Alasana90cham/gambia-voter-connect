@@ -18,17 +18,18 @@ export const DataIntegrityMonitor = ({ onRecover }: DataIntegrityMonitorProps) =
   const [isRecovering, setIsRecovering] = useState<boolean>(false);
   const [lastCheck, setLastCheck] = useState<number>(0);
   
-  // Check for unsaved form data in localStorage
+  // Check for unsaved form data in localStorage with improved pattern detection
   const checkForUnsavedData = () => {
     if (typeof localStorage !== 'undefined') {
       try {
         const backups = [];
         for (let i = 0; i < localStorage.length; i++) {
           const key = localStorage.key(i);
-          if (key && key.includes('voters_backup_')) {
+          // More comprehensive check for all potential backup patterns
+          if (key && (key.includes('voters_backup_') || key.includes('voter_submission_'))) {
             try {
               const backup = JSON.parse(localStorage.getItem(key) || '{}');
-              if (backup && backup.table === 'voters' && backup.data) {
+              if (backup && backup.data) {
                 backups.push({ key, backup });
               }
             } catch (e) {
@@ -100,11 +101,11 @@ export const DataIntegrityMonitor = ({ onRecover }: DataIntegrityMonitorProps) =
       let failed = 0;
       const keysToRemove = [];
       
-      // Find all backup data
+      // Find all backup data with broader pattern matching
       const backupKeys = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.includes('voters_backup_')) {
+        if (key && (key.includes('voters_backup_') || key.includes('voter_submission_'))) {
           backupKeys.push(key);
         }
       }
@@ -118,7 +119,7 @@ export const DataIntegrityMonitor = ({ onRecover }: DataIntegrityMonitorProps) =
           if (!backupStr) continue;
           
           const backup = JSON.parse(backupStr);
-          if (backup && backup.table === 'voters' && backup.data) {
+          if (backup && backup.data) {
             let retryCount = 0;
             let submitted = false;
             

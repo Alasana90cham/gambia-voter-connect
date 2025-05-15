@@ -1,165 +1,145 @@
 
-import { supabase, fetchPaginated } from "@/integrations/supabase/client";
-import { fetchAdmins } from "@/data/constituencies";
+import { supabase } from "@/integrations/supabase/client";
+import { UserRole } from "@/types/form";
 import { toast } from "@/components/ui/use-toast";
 
 /**
- * Load voter data with error handling and multiple retry mechanisms
+ * Loads voter data from Supabase with pagination to handle large datasets
+ * @returns Promise that resolves to an array of voter records
  */
 export const loadVoterData = async () => {
   try {
-    console.log("Starting ultra-reliable voter data fetch with NO LIMITS");
+    console.log("Loading voter data");
     
-    // First attempt: Use enhanced fetchPaginated function with improved reliability
-    let voters;
-    let attemptCount = 0;
-    const maxAttempts = 3;
+    // We'll use a higher limit per page to get more records, with pagination
+    const allRecords = [];
+    const pageSize = 10000; // Increased from default
+    let currentPage = 0;
+    let hasMoreData = true;
     
-    while (attemptCount < maxAttempts) {
-      try {
-        console.log(`Fetch attempt ${attemptCount + 1}/${maxAttempts}`);
-        voters = await fetchPaginated('voters', {
-          orderBy: 'created_at',
-          ascending: false
-        });
-        
-        if (voters && voters.length > 0) {
-          break;
-        }
-        
-        attemptCount++;
-      } catch (error) {
-        console.error(`Error on fetch attempt ${attemptCount + 1}:`, error);
-        attemptCount++;
-        
-        if (attemptCount >= maxAttempts) {
-          throw error;
-        }
-        
-        // Add exponential backoff delay between attempts
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attemptCount - 1)));
-      }
-    }
-    
-    // FALLBACK MECHANISM: If fetchPaginated fails, use direct query as last resort
-    if (!voters || voters.length === 0) {
-      console.warn("Primary fetch method failed, trying direct query fallback");
+    while (hasMoreData) {
+      const from = currentPage * pageSize;
+      const to = from + pageSize - 1;
       
-      try {
-        const { data: directData, error: directError } = await supabase
-          .from('voters')
-          .select('*')
-          .order('created_at', { ascending: false });
-          
-        if (directError) {
-          console.error("Direct query fallback error:", directError);
-        } else if (directData && directData.length > 0) {
-          console.log(`Fallback method succeeded: retrieved ${directData.length} records`);
-          voters = directData;
+      console.log(`Loading voter data page ${currentPage + 1}, range ${from}-${to}`);
+      
+      const { data, error } = await supabase
+        .from('voters')
+        .select('*')
+        .range(from, to)
+        .order('created_at', { ascending: false });
+      
+      if (error) {
+        console.error("Error loading voter data:", error);
+        throw error;
+      }
+      
+      if (data && data.length > 0) {
+        // Add numbering to the records before adding them to the result
+        const numberedData = data.map((record, idx) => ({
+          ...record,
+          rowNumber: from + idx + 1 // Add 1-based row numbering
+        }));
+        
+        allRecords.push(...numberedData);
+        currentPage++;
+        
+        // If we got less than pageSize records, we've reached the end
+        if (data.length < pageSize) {
+          hasMoreData = false;
         }
-      } catch (fallbackError) {
-        console.error("Fallback query failed:", fallbackError);
+      } else {
+        hasMoreData = false;
       }
     }
     
-    console.log(`Data fetch complete: ${voters?.length || 0} records retrieved`);
+    console.log(`Total voter records loaded: ${allRecords.length}`);
+    return allRecords;
     
-    if (voters && voters.length > 0) {
-      // Return the data
-      return voters;
-    } else {
-      return [];
-    }
   } catch (error) {
-    console.error("Error loading voter data:", error);
+    console.error("Failed to load voter data:", error);
+    toast({
+      title: "Data Loading Error",
+      description: "Could not load voter registration data. Please try again.",
+      variant: "destructive",
+    });
     throw error;
   }
 };
 
 /**
- * Load admin data with enhanced error handling and retry
+ * Loads admin data from Supabase
+ * @returns Promise that resolves to an array of admin records
  */
-export const loadAdmins = async () => {
-  let attempts = 0;
-  const maxAttempts = 3;
-  
-  while (attempts < maxAttempts) {
-    try {
-      const admins = await fetchAdmins();
-      console.log("Fetched admin data:", admins?.length || 0, "records");
-      return admins || [];
-    } catch (error) {
-      attempts++;
-      console.error(`Error loading admins (attempt ${attempts}/${maxAttempts}):`, error);
-      
-      if (attempts >= maxAttempts) {
-        toast({
-          title: "Admin Data Error",
-          description: "Failed to load admin information after multiple attempts",
-          variant: "destructive",
-        });
-        break;
-      }
-      
-      // Exponential backoff
-      await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempts - 1)));
+export const loadAdmins = async (): Promise<UserRole[]> => {
+  try {
+    const { data, error } = await supabase
+      .from('admins')
+      .select('*');
+    
+    if (error) {
+      console.error("Error loading admin data:", error);
+      throw error;
     }
+    
+    return data || [];
+  } catch (error) {
+    console.error("Failed to load admin data:", error);
+    return [];
   }
-  
-  return [];
 };
 
 /**
- * Setup realtime subscriptions for live data updates
+ * Sets up realtime subscriptions to update data automatically when it changes
+ * @param onVoterUpdate Function to call when voter data changes
+ * @param onAdminUpdate Function to call when admin data changes
+ * @returns Function to unsubscribe from realtime updates
  */
 export const setupRealtimeSubscriptions = (
-  loadVoterData: () => Promise<void>,
-  loadAdmins: () => Promise<void>
+  onVoterUpdate: () => void,
+  onAdminUpdate: () => void
 ) => {
-  console.log("Setting up realtime subscriptions for unlimited data");
-  
-  // Create channel with improved error handling
-  const votersChannel = supabase
-    .channel('voters-changes')
-    .on('postgres_changes', { 
-      event: '*', 
-      schema: 'public', 
-      table: 'voters'
-    }, (payload) => {
-      console.log(`Voter data change detected (${payload.eventType}), refreshing all data`);
-      // Always reload all data to ensure charts reflect current state
-      loadVoterData();
-    })
-    .subscribe((status) => {
-      console.log(`Voters subscription status: ${status}`);
-      
-      if (status === 'SUBSCRIBED') {
-        console.log('Successfully subscribed to voter changes');
-      } else if (status === 'CHANNEL_ERROR') {
-        console.error('Error with voter changes subscription');
-        toast({
-          title: "Sync Error",
-          description: "Unable to subscribe to data changes. Changes may not update in real-time.",
-          variant: "destructive",
-        });
-      }
-    });
+  try {
+    // Subscribe to voter table changes
+    const voterSubscription = supabase
+      .channel('voters_channel')
+      .on('postgres_changes', 
+        {
+          event: '*',
+          schema: 'public',
+          table: 'voters',
+        }, 
+        () => {
+          console.log("Realtime update detected for voters");
+          onVoterUpdate();
+        }
+      )
+      .subscribe();
     
-  // Create channel for admin changes
-  const adminsChannel = supabase
-    .channel('admin-changes')
-    .on('postgres_changes', { 
-      event: '*', 
-      schema: 'public', 
-      table: 'admins'
-    }, (payload) => {
-      console.log(`Admin data change detected (${payload.eventType})`);
-      loadAdmins();
-    })
-    .subscribe();
-  
-  return () => {
-    supabase.removeChannel(votersChannel);
-    supabase.removeChannel(adminsChannel);
-  };
+    // Subscribe to admin table changes
+    const adminSubscription = supabase
+      .channel('admins_channel')
+      .on('postgres_changes', 
+        {
+          event: '*',
+          schema: 'public',
+          table: 'admins',
+        }, 
+        () => {
+          console.log("Realtime update detected for admins");
+          onAdminUpdate();
+        }
+      )
+      .subscribe();
+    
+    // Return unsubscribe function
+    return () => {
+      console.log("Unsubscribing from realtime channels");
+      supabase.removeChannel(voterSubscription);
+      supabase.removeChannel(adminSubscription);
+    };
+  } catch (error) {
+    console.error("Error setting up realtime subscriptions:", error);
+    return () => {};
+  }
 };
