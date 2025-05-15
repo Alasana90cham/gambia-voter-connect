@@ -15,14 +15,31 @@ import { DataIntegrityMonitor } from '@/components/statistics/DataIntegrityMonit
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
 
 const Statistics = () => {
+  // State declarations - all grouped together for hook consistency
   const [isAdmin, setIsAdmin] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
   const [dataRefresh, setDataRefresh] = useState<number>(0);
+
   const { toast } = useToast();
 
-  // Reset the inactivity timer - defined outside of any conditional logic to maintain hook order
+  // Define all callback functions with useCallback before using them in effects
+  const handleLogout = useCallback(() => {
+    localStorage.removeItem('adminSession');
+    setIsAdmin(false);
+    
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+      setInactivityTimer(null);
+    }
+    
+    toast({
+      title: "Logged Out",
+      description: "You have been logged out successfully.",
+    });
+  }, [inactivityTimer, toast]);
+
   const resetInactivityTimer = useCallback(() => {
     // Clear existing timer if any
     if (inactivityTimer) {
@@ -39,25 +56,8 @@ const Statistics = () => {
     }, SESSION_TIMEOUT);
     
     setInactivityTimer(timer);
-  }, [inactivityTimer]);
+  }, [inactivityTimer, handleLogout, toast]);
 
-  // Handle logout - defined early to ensure consistent hook order
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('adminSession');
-    setIsAdmin(false);
-    
-    if (inactivityTimer) {
-      clearTimeout(inactivityTimer);
-      setInactivityTimer(null);
-    }
-    
-    toast({
-      title: "Logged Out",
-      description: "You have been logged out successfully.",
-    });
-  }, [inactivityTimer, toast]);
-
-  // Check connection status - defined early to ensure consistent hook order
   const checkConnectionStatus = useCallback(async () => {
     try {
       setConnectionStatus('connecting');
@@ -80,7 +80,6 @@ const Statistics = () => {
     }
   }, [toast]);
 
-  // Handle data recovery - defined early to ensure consistent hook order
   const handleDataRecovery = useCallback(() => {
     // Increment data refresh to trigger reloads of statistics data
     setDataRefresh(prev => prev + 1);
@@ -90,7 +89,6 @@ const Statistics = () => {
     });
   }, [toast]);
 
-  // Handle login success - defined early to ensure consistent hook order
   const handleLoginSuccess = useCallback(() => {
     setIsAdmin(true);
     resetInactivityTimer();

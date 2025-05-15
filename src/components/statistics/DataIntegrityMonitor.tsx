@@ -32,7 +32,8 @@ export const DataIntegrityMonitor = ({ onRecover }: DataIntegrityMonitorProps) =
                 backups.push({ key, backup });
               }
             } catch (e) {
-              // Skip invalid JSON
+              console.error("Error parsing backup:", e);
+              // Skip invalid JSON but don't delete it yet - might be recoverable
             }
           }
         }
@@ -88,7 +89,7 @@ export const DataIntegrityMonitor = ({ onRecover }: DataIntegrityMonitorProps) =
     };
   }, []);
 
-  // Attempt to recover unsaved data
+  // Attempt to recover unsaved data with improved reliability
   const attemptRecovery = async () => {
     if (isRecovering) return;
     
@@ -108,7 +109,9 @@ export const DataIntegrityMonitor = ({ onRecover }: DataIntegrityMonitorProps) =
         }
       }
       
-      // Process backups one by one
+      console.log(`Found ${backupKeys.length} potential backup items to recover`);
+      
+      // Process backups one by one with retry mechanism
       for (const key of backupKeys) {
         try {
           const backupStr = localStorage.getItem(key);
@@ -116,19 +119,46 @@ export const DataIntegrityMonitor = ({ onRecover }: DataIntegrityMonitorProps) =
           
           const backup = JSON.parse(backupStr);
           if (backup && backup.table === 'voters' && backup.data) {
-            // Try to submit to Supabase
-            const { data, error } = await supabase
-              .from('voters')
-              .insert(backup.data)
-              .select();
-              
-            if (error) {
-              console.error("Recovery insert failed:", error);
-              failed++;
-            } else {
-              console.log("Successfully recovered data:", data);
-              recovered++;
-              keysToRemove.push(key);
+            let retryCount = 0;
+            let submitted = false;
+            
+            // Try up to 3 times for each record
+            while (retryCount < 3 && !submitted) {
+              try {
+                console.log(`Attempting to recover data (attempt ${retryCount + 1}): ${key}`);
+                // Try to submit to Supabase
+                const { data, error } = await supabase
+                  .from('voters')
+                  .insert(backup.data)
+                  .select();
+                  
+                if (error) {
+                  console.error(`Recovery insert failed (attempt ${retryCount + 1}):`, error);
+                  retryCount++;
+                  
+                  if (retryCount < 3) {
+                    // Add exponential backoff
+                    await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+                  } else {
+                    failed++;
+                  }
+                } else {
+                  console.log("Successfully recovered data:", data);
+                  recovered++;
+                  keysToRemove.push(key);
+                  submitted = true;
+                }
+              } catch (err) {
+                console.error(`Recovery attempt ${retryCount + 1} error:`, err);
+                retryCount++;
+                
+                if (retryCount >= 3) {
+                  failed++;
+                } else {
+                  // Wait before retrying
+                  await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, retryCount)));
+                }
+              }
             }
           }
         } catch (e) {
@@ -144,7 +174,9 @@ export const DataIntegrityMonitor = ({ onRecover }: DataIntegrityMonitorProps) =
       keysToRemove.forEach(key => {
         try {
           localStorage.removeItem(key);
+          console.log(`Removed recovered item: ${key}`);
         } catch (e) {
+          console.error(`Failed to remove backup: ${key}`, e);
           // Ignore removal errors
         }
       });
@@ -169,6 +201,12 @@ export const DataIntegrityMonitor = ({ onRecover }: DataIntegrityMonitorProps) =
           title: "Recovery Failed",
           description: `Failed to recover ${failed} registration(s). Please try again later.`,
           variant: "destructive",
+        });
+      } else {
+        toast({
+          title: "No Data to Recover",
+          description: "No valid recovery data was found.",
+          variant: "default",
         });
       }
     } catch (e) {

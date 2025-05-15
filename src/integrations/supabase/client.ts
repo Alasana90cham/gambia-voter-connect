@@ -9,6 +9,59 @@ export const supabase = createClient(supabaseUrl, supabaseKey);
 // Define table names type to ensure type safety
 export type TableName = 'admins' | 'voters';
 
+/**
+ * Enhanced insurance submission function that retries failed submissions
+ * and provides better error handling and recovery
+ */
+export async function insuranceSubmit(
+  tableName: TableName,
+  data: any,
+  maxRetries: number = 3,
+  retryDelay: number = 1000
+) {
+  let attempt = 0;
+  let lastError: any = null;
+  
+  while (attempt < maxRetries) {
+    try {
+      console.log(`Insurance submit attempt ${attempt + 1}/${maxRetries} for table ${tableName}`);
+      
+      // Attempt to insert the data
+      const { data: result, error } = await supabase
+        .from(tableName)
+        .insert(data)
+        .select();
+        
+      // If there's an error, throw it to be caught and retried
+      if (error) {
+        console.error(`Error on attempt ${attempt + 1}:`, error);
+        throw error;
+      }
+      
+      // If successful, return the result
+      console.log(`Successfully submitted data on attempt ${attempt + 1}`);
+      return result;
+    } catch (err) {
+      lastError = err;
+      attempt++;
+      
+      // If we've reached the maximum retries, break out of the loop
+      if (attempt >= maxRetries) {
+        console.error(`All ${maxRetries} attempts failed`);
+        break;
+      }
+      
+      // Wait before retrying with exponential backoff
+      const backoffDelay = retryDelay * Math.pow(2, attempt - 1);
+      console.log(`Waiting ${backoffDelay}ms before retry...`);
+      await new Promise(resolve => setTimeout(resolve, backoffDelay));
+    }
+  }
+  
+  // If we get here, all attempts failed
+  throw lastError || new Error('Insurance submit failed for unknown reason');
+}
+
 // Enhanced fetchPaginated function with proper typing and improved reliability
 export async function fetchPaginated(
   tableName: TableName,
@@ -18,7 +71,7 @@ export async function fetchPaginated(
     limit?: number;
   } = {}
 ) {
-  const { orderBy = 'created_at', ascending = true, limit = 1000 } = options;
+  const { orderBy = 'created_at', ascending = true, limit = 10000 } = options;
   
   try {
     console.log(`Starting paginated fetch for ${tableName}`);
