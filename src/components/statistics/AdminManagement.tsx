@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { UserRole } from '@/types/form';
 import { checkInitialAdminSetup } from '@/utils/adminOperations';
@@ -24,27 +24,28 @@ const AdminManagement: React.FC<AdminManagementProps> = ({ adminList, onUpdateSu
     checkSetupStatus();
   }, []);
   
-  const handleAdminAdded = () => {
+  // Define callbacks with proper dependency arrays
+  const handleAdminAdded = useCallback(() => {
     // The parent component (Statistics.tsx) will handle reload via Supabase subscriptions
     if (onUpdateSuccess) {
       onUpdateSuccess();
     }
-  };
+  }, [onUpdateSuccess]);
   
-  const handleAdminDeleted = () => {
+  const handleAdminDeleted = useCallback(() => {
     // The parent component (Statistics.tsx) will handle reload via Supabase subscriptions
     if (onUpdateSuccess) {
       onUpdateSuccess();
     }
-  };
+  }, [onUpdateSuccess]);
   
-  const handleSetupComplete = () => {
+  const handleSetupComplete = useCallback(() => {
     setInitialAdminSetupDone(true);
     // The parent component (Statistics.tsx) will handle reload via Supabase subscriptions
     if (onUpdateSuccess) {
       onUpdateSuccess();
     }
-  };
+  }, [onUpdateSuccess]);
 
   return (
     <Card className="p-6 mb-8">
