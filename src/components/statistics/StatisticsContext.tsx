@@ -1,5 +1,5 @@
 
-import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, ReactNode, useMemo } from 'react';
 import { toast } from "@/components/ui/use-toast";
 import { UserRole } from "@/types/form";
 import { FilterState } from './RegistrationTableProps';
@@ -7,6 +7,8 @@ import { processChartData } from './utils/chartDataUtils';
 import { loadVoterData, loadAdmins, setupRealtimeSubscriptions } from './utils/dataLoadingUtils';
 import { createDebouncedFilterFn } from './utils/filterUtils';
 import { handleExcelExport as exportToExcel } from './utils/exportUtils';
+import { useDataRefresh } from './hooks/useDataRefresh';
+import { usePagination } from './hooks/usePagination';
 
 export interface ChartData {
   name: string;
@@ -54,12 +56,19 @@ export const useStatistics = () => {
 };
 
 export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
-  // State declarations - group all useState calls together
+  // State for data
+  const [voterData, setVoterData] = useState<any[]>([]);
+  const [filteredData, setFilteredData] = useState<any[]>([]);
+  const [adminList, setAdminList] = useState<UserRole[]>([]);
+  
+  // State for chart data
+  const [genderData, setGenderData] = useState<ChartData[]>([]);
+  const [regionData, setRegionData] = useState<ChartData[]>([]);
+  const [constituencyData, setConstituencyData] = useState<{[key: string]: ChartData[]}>({});
+  
+  // UI state
   const [selectedRegion, setSelectedRegion] = useState('Banjul');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
-  const [totalPages, setTotalPages] = useState(1);
-  const [totalRecords, setTotalRecords] = useState(0);
+  const [isLoading, setIsLoading] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     fullName: '',
     organization: '',
@@ -70,22 +79,19 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     identificationType: '',
     identificationNumber: ''
   });
-  const [voterData, setVoterData] = useState<any[]>([]);
-  const [filteredData, setFilteredData] = useState<any[]>([]);
-  const [adminList, setAdminList] = useState<UserRole[]>([]);
-  const [genderData, setGenderData] = useState<ChartData[]>([]);
-  const [regionData, setRegionData] = useState<ChartData[]>([]);
-  const [constituencyData, setConstituencyData] = useState<{[key: string]: ChartData[]}>({});
-  const [isLoading, setIsLoading] = useState(false);
-  const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
+  
+  // Meta state
   const [updateCount, setUpdateCount] = useState(0);
+  const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
+  
+  // Total records for pagination
+  const [totalRecords, setTotalRecords] = useState(0);
   
   // Helper function to update state after filtering
-  const updateFilterResults = useCallback((result: any[]) => {
+  const updateFilterResults = (result: any[]) => {
     console.log(`Updating filtered results: ${result.length} records after filtering`);
     setFilteredData(result);
     setTotalRecords(result.length);
-    setTotalPages(Math.ceil(result.length / pageSize));
     setCurrentPage(1); // Reset to first page when filters change
     setIsLoading(false);
     
@@ -94,10 +100,10 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     setGenderData(chartData.genderData);
     setRegionData(chartData.regionData);
     setConstituencyData(chartData.constituencyData);
-  }, [pageSize]);
+  };
   
   // Load voter data with error handling
-  const fetchVoterData = useCallback(async () => {
+  const fetchVoterData = async () => {
     setIsLoading(true);
     
     try {
@@ -113,7 +119,6 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         setVoterData(voters);
         setFilteredData(voters);
         setTotalRecords(voters.length);
-        setTotalPages(Math.ceil(voters.length / pageSize));
         
         // Process chart data with all records
         const chartData = processChartData(voters);
@@ -132,7 +137,6 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         setRegionData([]);
         setConstituencyData({});
         setTotalRecords(0);
-        setTotalPages(1);
         
         toast({
           title: "No Data Found",
@@ -151,26 +155,37 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       setVoterData([]);
       setFilteredData([]);
       setTotalRecords(0);
-      setTotalPages(1);
     } finally {
       setIsLoading(false);
     }
-  }, [pageSize]);
+  };
   
   // Load admins data
-  const fetchAdminData = useCallback(async () => {
+  const fetchAdminData = async () => {
     try {
       const admins = await loadAdmins();
       setAdminList(admins);
     } catch (error) {
       console.error("Error loading admin data:", error);
     }
-  }, []);
+  };
+  
+  // Get pagination-related hooks
+  const { 
+    currentPage,
+    setCurrentPage,
+    pageSize,
+    setPageSize,
+    totalPages
+  } = usePagination(totalRecords);
+  
+  // Get data refresh hooks
+  const { handleDeleteSuccess } = useDataRefresh(fetchVoterData, fetchAdminData);
 
   // Create the debounced filter function
   const debouncedApplyFilters = useMemo(
     () => createDebouncedFilterFn(voterData, filters, updateFilterResults),
-    [voterData, filters, updateFilterResults]
+    [voterData, filters]
   );
 
   // Apply filters when filters or source data changes
@@ -185,32 +200,12 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     };
   }, [filters, voterData, debouncedApplyFilters]);
 
-  // Delete success handler
-  const handleDeleteSuccess = useCallback(async () => {
-    console.log("Delete operation completed, performing full data refresh");
+  // CSV export functionality wrapped in a useCallback
+  const handleExcelExport = () => {
     setIsLoading(true);
-    
-    try {
-      // Force full reload with delay to ensure database consistency
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await fetchVoterData();
-      await fetchAdminData();
-      
-      toast({
-        title: "Data Refreshed",
-        description: "The latest data has been loaded from the database",
-      });
-    } catch (error) {
-      console.error("Error refreshing data after deletion:", error);
-      toast({
-        title: "Refresh Failed",
-        description: "Unable to refresh data. Please reload the page.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [fetchVoterData, fetchAdminData]);
+    exportToExcel(filteredData);
+    setIsLoading(false);
+  };
   
   // Initial data loading
   useEffect(() => {
@@ -236,14 +231,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     return () => {
       unsubscribe();
     };
-  }, [fetchVoterData, fetchAdminData]);
-
-  // CSV export functionality wrapped in a useCallback
-  const handleExcelExport = useCallback(() => {
-    setIsLoading(true);
-    exportToExcel(filteredData);
-    setIsLoading(false);
-  }, [filteredData]);
+  }, []);
 
   // Create the context value object
   const contextValue = useMemo(() => ({
@@ -280,8 +268,9 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     totalPages,
     totalRecords,
     pageSize,
-    handleDeleteSuccess,
-    handleExcelExport
+    setPageSize,
+    setCurrentPage,
+    handleDeleteSuccess
   ]);
 
   return (
