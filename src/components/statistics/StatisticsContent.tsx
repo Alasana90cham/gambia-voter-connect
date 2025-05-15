@@ -46,14 +46,17 @@ const StatisticsContent: React.FC<StatisticsContentProps> = ({ onLogout }) => {
     setActiveTab(newTab);
   };
 
-  // Handle data recovery completion
+  // Handle data recovery completion - improved for more reliable data refresh
   const handleDataRecovery = () => {
-    // Refresh the data
-    handleDeleteSuccess();
-    toast({
-      title: "Data Refreshed",
-      description: "Data has been refreshed with recovered records.",
-    });
+    console.log("Data recovery triggered in StatisticsContent");
+    // Refresh the data with a slight delay to ensure database consistency
+    setTimeout(() => {
+      handleDeleteSuccess();
+      toast({
+        title: "Data Refreshed",
+        description: "Data has been refreshed with recovered records.",
+      });
+    }, 300);
   };
   
   return (

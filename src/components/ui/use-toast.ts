@@ -7,7 +7,7 @@ let lastToastTime = 0;
 const TOAST_DEBOUNCE_TIME = 1000; // 1 second
 
 // Wrap toast function to prevent spam
-const enhancedToast = (props) => {
+const enhancedToast = (props: any) => {
   const now = Date.now();
   if (now - lastToastTime < TOAST_DEBOUNCE_TIME && props.variant !== "destructive") {
     return;

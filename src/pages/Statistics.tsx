@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect, useCallback } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
@@ -24,7 +23,7 @@ const Statistics = () => {
 
   const { toast } = useToast();
 
-  // Define all callback functions with useCallback before using them in effects
+  // Handle logout with proper dependency management to avoid hook issues
   const handleLogout = useCallback(() => {
     localStorage.removeItem('adminSession');
     setIsAdmin(false);
@@ -40,6 +39,7 @@ const Statistics = () => {
     });
   }, [inactivityTimer, toast]);
 
+  // Reset inactivity timer with proper dependency array
   const resetInactivityTimer = useCallback(() => {
     // Clear existing timer if any
     if (inactivityTimer) {
@@ -58,6 +58,7 @@ const Statistics = () => {
     setInactivityTimer(timer);
   }, [inactivityTimer, handleLogout, toast]);
 
+  // Improved connection status check with more robust error handling
   const checkConnectionStatus = useCallback(async () => {
     try {
       setConnectionStatus('connecting');
@@ -80,21 +81,25 @@ const Statistics = () => {
     }
   }, [toast]);
 
+  // Enhanced data recovery handler to ensure numbers are updated properly
   const handleDataRecovery = useCallback(() => {
     // Increment data refresh to trigger reloads of statistics data
     setDataRefresh(prev => prev + 1);
+    console.log("Data recovery triggered in Statistics, refreshing data", dataRefresh + 1);
+    
     toast({
       title: "Data Recovered",
       description: "Statistics updated with recovered data.",
     });
-  }, [toast]);
+  }, [dataRefresh, toast]);
 
+  // Login success handler with proper dependencies
   const handleLoginSuccess = useCallback(() => {
     setIsAdmin(true);
     resetInactivityTimer();
   }, [resetInactivityTimer]);
 
-  // Setup event listeners for user activity
+  // Setup event listeners for user activity - no changes needed
   useEffect(() => {
     if (isAdmin) {
       // Reset timer on user activity
@@ -125,7 +130,7 @@ const Statistics = () => {
     }
   }, [isAdmin, inactivityTimer, resetInactivityTimer]);
 
-  // Monitor connection status
+  // Enhanced connection status monitoring
   useEffect(() => {
     // Check connection immediately
     checkConnectionStatus();
@@ -140,7 +145,7 @@ const Statistics = () => {
     return () => clearInterval(intervalId);
   }, [checkConnectionStatus, connectionStatus]);
 
-  // Check for existing admin session on component mount
+  // Check for existing admin session
   useEffect(() => {
     const checkExistingSession = () => {
       try {
@@ -215,7 +220,7 @@ const Statistics = () => {
     checkSupabaseConnection();
   }, [toast]);
 
-  // Setup connection recovery for offline scenarios
+  // Connection recovery for offline scenarios
   useEffect(() => {
     const handleOnline = () => {
       toast({
@@ -294,6 +299,8 @@ const Statistics = () => {
     );
   }
 
+  // The key prop here ensures StatisticsProvider remounts when dataRefresh changes,
+  // forcing a complete refresh of all statistics data
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
