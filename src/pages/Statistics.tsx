@@ -8,8 +8,8 @@ import StatisticsContent from '@/components/statistics/StatisticsContent';
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
-// Session timeout in milliseconds (2 hours)
-const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
+// Session timeout in milliseconds (3 hours)
+const SESSION_TIMEOUT = 3 * 60 * 60 * 1000;
 
 const Statistics = () => {
   const [isAdmin, setIsAdmin] = useState(false);
@@ -82,6 +82,13 @@ const Statistics = () => {
             if (currentTime < expiryTime) {
               console.log("Valid admin session found");
               setIsAdmin(true);
+              
+              // Refresh session expiry time
+              const updatedSession = {
+                ...session,
+                expires: new Date(Date.now() + SESSION_TIMEOUT).toISOString()
+              };
+              localStorage.setItem('adminSession', JSON.stringify(updatedSession));
             } else {
               console.log("Admin session expired, logging out");
               localStorage.removeItem('adminSession');
@@ -144,6 +151,18 @@ const Statistics = () => {
   const handleLoginSuccess = () => {
     setIsAdmin(true);
     resetInactivityTimer();
+    
+    // Set session with explicit expiry
+    const session = {
+      timestamp: new Date().toISOString(),
+      expires: new Date(Date.now() + SESSION_TIMEOUT).toISOString()
+    };
+    localStorage.setItem('adminSession', JSON.stringify(session));
+    
+    toast({
+      title: "Login Successful",
+      description: "Welcome to the admin dashboard.",
+    });
   };
 
   const handleLogout = () => {

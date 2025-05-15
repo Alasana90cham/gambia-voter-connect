@@ -23,14 +23,14 @@ export const NoDataRow = () => (
   </TableRow>
 );
 
-// Optimized export formatter for large datasets
+// Enhanced export formatter for large datasets - no censoring
 export const formatForExport = (voter: VoterData) => {
   const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
   const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
                 voter.identification_type === 'identification_document' ? 'ID Document' :
                 voter.identification_type === 'passport_number' ? 'Passport' : '';
   
-  // No masking for admin exports - show complete data
+  // No masking for exports - show complete data
   return `"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"`;
 };
 
@@ -102,7 +102,7 @@ export const filterLargeDataset = (data: any[], filterFn: (item: any) => boolean
   return result;
 };
 
-// NEW: Generate CSV content in memory-efficient chunks
+// Generate CSV content in memory-efficient chunks
 export const generateCsvContent = (data: any[], includeHeaders = true): string => {
   const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
   const chunkSize = 1000;
@@ -126,7 +126,7 @@ export const generateCsvContent = (data: any[], includeHeaders = true): string =
   return csvContent;
 };
 
-// NEW: Function to download generated content
+// Function to download generated content
 export const downloadCsv = (content: string, filename: string): void => {
   const blob = new Blob([content], { type: 'text/csv;charset=utf-8;' });
   const url = URL.createObjectURL(blob);

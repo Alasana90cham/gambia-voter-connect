@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -159,13 +160,13 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     return allConstituencies;
   };
   
-  // Updated export function to include row numbers
+  // Updated export function to include row numbers and no censoring
   const handleExcelExport = () => {
     // Create a CSV string with the filtered data
     const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
     let csvContent = headers;
     
-    // Add the filtered data rows with full information (no redaction for admins)
+    // Add the filtered data rows with full information (no redaction)
     filteredData.forEach((voter, index) => {
       csvContent += `${index + 1},${formatForExport(voter)}\n`;
     });
@@ -187,13 +188,21 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     });
   };
 
-  // Updated print function to include row numbers
+  // Enhanced print function to include row numbers and show all data
   const handlePrint = () => {
     if (tableRef.current) {
       const printWindow = window.open('', '_blank');
       if (printWindow) {
         printWindow.document.write('<html><head><title>Voter Registration Data</title>');
         printWindow.document.write('<style>');
+        printWindow.document.write('@media print {');
+        printWindow.document.write('  @page { size: landscape; margin: 0.5cm; }');
+        printWindow.document.write('  table { border-collapse: collapse; width: 100%; font-size: 11px; }');
+        printWindow.document.write('  th, td { border: 1px solid #ddd; padding: 5px; text-align: left; }');
+        printWindow.document.write('  th { background-color: #f2f2f2; }');
+        printWindow.document.write('  h1 { font-size: 16px; }');
+        printWindow.document.write('  h3 { font-size: 14px; }');
+        printWindow.document.write('}');
         printWindow.document.write('table { border-collapse: collapse; width: 100%; }');
         printWindow.document.write('th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }');
         printWindow.document.write('th { background-color: #f2f2f2; }');
@@ -207,17 +216,17 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         printWindow.document.write('<tr>');
         printWindow.document.write('<th>No.</th>');
         printWindow.document.write('<th>Full Name</th>');
-        printWindow.document.write('<th>Email</th>'); // Now including email for admin print
+        printWindow.document.write('<th>Email</th>'); // Showing full email, no censoring
         printWindow.document.write('<th>Organization</th>');
         printWindow.document.write('<th>Date of Birth</th>');
         printWindow.document.write('<th>Gender</th>');
         printWindow.document.write('<th>Region</th>');
         printWindow.document.write('<th>Constituency</th>');
         printWindow.document.write('<th>ID Type</th>');
-        printWindow.document.write('<th>ID Number</th>');
+        printWindow.document.write('<th>ID Number</th>'); // Showing full ID, no censoring
         printWindow.document.write('</tr>');
         
-        // Table data with full information (no masking for admins)
+        // Table data with full information (no masking)
         filteredData.forEach((voter, index) => {
           const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
           const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
@@ -226,23 +235,26 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
           
           printWindow.document.write('<tr>');
           printWindow.document.write(`<td>${index + 1}</td>`); // Row number
-          printWindow.document.write(`<td>${voter.full_name}</td>`);
-          printWindow.document.write(`<td>${voter.email}</td>`); // Show full email
-          printWindow.document.write(`<td>${voter.organization}</td>`);
+          printWindow.document.write(`<td>${voter.full_name || ''}</td>`);
+          printWindow.document.write(`<td>${voter.email || ''}</td>`); // Show full email
+          printWindow.document.write(`<td>${voter.organization || ''}</td>`);
           printWindow.document.write(`<td>${dob}</td>`);
           printWindow.document.write(`<td>${voter.gender || ''}</td>`);
           printWindow.document.write(`<td>${voter.region || ''}</td>`);
           printWindow.document.write(`<td>${voter.constituency || ''}</td>`);
           printWindow.document.write(`<td>${idType}</td>`);
-          printWindow.document.write(`<td>${voter.identification_number}</td>`); // Show full ID number
+          printWindow.document.write(`<td>${voter.identification_number || ''}</td>`); // Show full ID number
           printWindow.document.write('</tr>');
         });
         
         printWindow.document.write('</table>');
         printWindow.document.write('<p>Total records: ' + filteredData.length + '</p>');
+        printWindow.document.write('<div style="text-align: center; margin-top: 20px;">');
+        printWindow.document.write('<button onclick="window.print()">Print This Page</button>');
+        printWindow.document.write('<button onclick="window.close()">Close</button>');
+        printWindow.document.write('</div>');
         printWindow.document.write('</body></html>');
         printWindow.document.close();
-        printWindow.print();
       }
     }
   };
@@ -267,7 +279,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     }, 300);
   };
   
-  // Use the new generatePaginationItems function for better pagination with large datasets
+  // Use the generatePaginationItems function for better pagination with large datasets
   const pageNumbers = generatePaginationItems(effectiveCurrentPage, totalPages);
   
   // Reset to first page when filters change
@@ -282,7 +294,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   
   // Set up real-time subscription for deleted rows with privacy protection
   useEffect(() => {
-    // Avoiding direct logging of sensitive data
     console.log("Setting up real-time subscription for voter updates");
     
     const channel = supabase
@@ -335,7 +346,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     );
   };
 
-  // Updated VoterRow component - with row number
+  // Updated VoterRow component with row number
   const VoterRow = ({ voter, index }) => {
     const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
     const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
@@ -534,7 +545,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         </div>
       </div>
       
-      {/* Enhanced pagination controls with better state feedback */}
+      {/* Enhanced pagination controls */}
       {totalPages > 1 && (
         <Pagination className="mt-4">
           <PaginationContent>

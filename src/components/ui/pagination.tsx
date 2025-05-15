@@ -13,7 +13,6 @@ const Pagination = ({ className, ...props }: React.ComponentProps<"nav">) => (
     {...props}
   />
 )
-Pagination.displayName = "Pagination"
 
 const PaginationContent = React.forwardRef<
   HTMLUListElement,
@@ -107,57 +106,51 @@ const PaginationEllipsis = ({
 )
 PaginationEllipsis.displayName = "PaginationEllipsis"
 
-// Improved pagination range generation for very large datasets
-const generatePaginationItems = (currentPage: number, totalPages: number): (number | string)[] => {
-  // For very large datasets, we need a more sophisticated approach
-  const items: (number | string)[] = [];
-  
-  // For massive datasets, use a dynamic window approach
-  if (totalPages <= 1) {
-    return [1]; // Only one page
+// Helper function to generate pagination items array optimized for large page counts
+export const generatePaginationItems = (
+  currentPage: number, 
+  totalPages: number,
+  surroundingPages: number = 1
+): (number | 'ellipsis')[] => {
+  // Handle special cases
+  if (totalPages <= 7) {
+    // For small number of pages, show all
+    return Array.from({ length: totalPages }, (_, i) => i + 1);
   }
   
-  // Always show first page
+  const items: (number | 'ellipsis')[] = [];
+  
+  // Always include first page
   items.push(1);
   
-  // Determine the range of pages to show around current page
-  let rangeStart = Math.max(2, currentPage - 2);
-  let rangeEnd = Math.min(totalPages - 1, currentPage + 2);
-  
-  // Adjust range to always show 5 pages if possible
-  if (rangeEnd - rangeStart < 4) {
-    if (currentPage < totalPages / 2) {
-      // Near the start, extend end
-      rangeEnd = Math.min(totalPages - 1, rangeStart + 4);
-    } else {
-      // Near the end, extend start
-      rangeStart = Math.max(2, rangeEnd - 4);
+  // First ellipsis handling
+  if (currentPage > 2 + surroundingPages) {
+    items.push('ellipsis');
+  } else {
+    // No ellipsis needed, include page 2
+    if (totalPages > 1) {
+      items.push(2);
     }
   }
   
-  // Add ellipsis between 1 and rangeStart if needed
-  if (rangeStart > 2) {
-    items.push("ellipsis");
-  } else if (rangeStart === 2) {
-    items.push(2); // No need for ellipsis, just show 2
-  }
+  // Pages around current page
+  const rangeStart = Math.max(currentPage - surroundingPages, 2);
+  const rangeEnd = Math.min(currentPage + surroundingPages, totalPages - 1);
   
-  // Add the pages in range
+  // Add pages around current page (avoid duplicates)
   for (let i = rangeStart; i <= rangeEnd; i++) {
-    if (i !== 1 && i !== totalPages) { // Skip 1 and totalPages as they're handled separately
+    if (!items.includes(i)) {
       items.push(i);
     }
   }
   
-  // Add ellipsis between rangeEnd and totalPages if needed
-  if (rangeEnd < totalPages - 1) {
-    items.push("ellipsis");
-  } else if (rangeEnd === totalPages - 1) {
-    items.push(totalPages - 1); // No need for ellipsis
+  // Last ellipsis handling
+  if (currentPage < totalPages - (1 + surroundingPages)) {
+    items.push('ellipsis');
   }
   
-  // Always show last page if more than 1 page
-  if (totalPages > 1) {
+  // Always include last page if not already included
+  if (totalPages > 1 && !items.includes(totalPages)) {
     items.push(totalPages);
   }
   
@@ -172,5 +165,4 @@ export {
   PaginationLink,
   PaginationNext,
   PaginationPrevious,
-  generatePaginationItems
 }
