@@ -1,8 +1,6 @@
-
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { uniqueId } from "@/lib/utils";
 
 // Export region constituencies data that we'll serve statically
 export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
@@ -173,7 +171,7 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
       const { data: rpcData, error: rpcError } = await supabase.rpc('admin_login', { 
         admin_email: email, 
         admin_password: password 
-      });
+      }, { signal: controller.signal });
       
       clearTimeout(timeoutId);
       
@@ -215,7 +213,7 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
       }
       
       return false;
-    } catch (error: any) {
+    } catch (error) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
         console.error("Login request timed out");
@@ -380,77 +378,48 @@ export const fetchVoterData = async () => {
 };
 
 export const submitVoterRegistration = async (formData: VoterFormData) => {
-  try {
-    // Format data correctly for database submission
-    const dbFormData = {
-      full_name: formData.fullName,
-      email: formData.email,
-      date_of_birth: format(formData.dateOfBirth, 'yyyy-MM-dd'),
-      gender: formData.gender,
-      organization: formData.organization,
-      region: formData.region,
-      constituency: formData.constituency,
-      identification_type: formData.identificationType,
-      identification_number: formData.identificationNumber,
-      agree_to_terms: formData.agreeToTerms
-    };
-    
-    // Store backup locally first in case of connectivity issues
-    const submissionId = uniqueId('submission_');
-    const backupKey = `voter_submission_${submissionId}`;
+  return fetchWithRetry(async () => {
     try {
-      localStorage.setItem(backupKey, JSON.stringify({
-        data: dbFormData,
-        timestamp: new Date().toISOString()
-      }));
-    } catch (e) {
-      console.warn("Failed to create local backup", e);
-    }
-    
-    // Using the imported function from integrations/supabase/client.ts
-    const { data: voters, error } = await supabase
-      .from('voters')
-      .insert(dbFormData)
-      .select();
+      console.log("Submitting voter registration:", formData);
       
-    if (error) throw error;
-    
-    // Remove backup on successful submission
-    try {
-      localStorage.removeItem(backupKey);
-    } catch (e) {
-      // Ignore errors during cleanup
-    }
-    
-    return voters;
-  } catch (error) {
-    console.error("Failed to submit voter registration:", error);
-    
-    // Store failed submission for automatic recovery
-    try {
-      const failedSubmissionKey = `voters_backup_${Date.now()}`;
-      const submissionData = {
-        table: 'voters',
-        data: {
-          full_name: formData.fullName,
-          email: formData.email,
-          date_of_birth: format(formData.dateOfBirth, 'yyyy-MM-dd'),
-          gender: formData.gender,
-          organization: formData.organization,
-          region: formData.region,
-          constituency: formData.constituency,
-          identification_type: formData.identificationType,
-          identification_number: formData.identificationNumber,
-          agree_to_terms: formData.agreeToTerms
-        },
-        timestamp: Date.now(),
-        error: error instanceof Error ? error.message : 'Unknown error'
+      if (!formData.dateOfBirth) {
+        throw new Error("Date of birth is required");
+      }
+      
+      // Use type casting to match Supabase expected types
+      const insertData = {
+        full_name: formData.fullName,
+        email: formData.email,
+        date_of_birth: format(formData.dateOfBirth, 'yyyy-MM-dd'),
+        gender: formData.gender,
+        organization: formData.organization,
+        region: formData.region,
+        constituency: formData.constituency,
+        identification_type: formData.identificationType,
+        identification_number: formData.identificationNumber,
+        agree_to_terms: formData.agreeToTerms
       };
-      localStorage.setItem(failedSubmissionKey, JSON.stringify(submissionData));
-    } catch (e) {
-      console.error("Failed to save backup for failed submission:", e);
+      
+      // Format the Date object to a string for database storage
+      const { data, error } = await supabase
+        .from('voters')
+        .insert(insertData as any)
+        .select();
+        
+      if (error) {
+        console.error("Error submitting registration:", error);
+        throw error;
+      }
+      
+      console.log("Registration submitted successfully:", data);
+      
+      // Invalidate voter data cache after new submission
+      voterDataCache.invalidate();
+      
+      return data;
+    } catch (error) {
+      console.error("Error submitting registration:", error);
+      throw error;
     }
-    throw error;
-  }
+  });
 };
-

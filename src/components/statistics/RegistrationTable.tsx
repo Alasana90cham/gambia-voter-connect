@@ -1,53 +1,116 @@
+import React, { useState, useRef, useEffect } from 'react';
+import { Card } from '@/components/ui/card';
+import { Button } from '@/components/ui/button';
+import { Filter, Download, Printer, ListOrdered } from 'lucide-react';
+import { Input } from '@/components/ui/input';
+import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
+import { toast } from "@/components/ui/use-toast";
+import { Checkbox } from "@/components/ui/checkbox";
+import { supabase } from "@/integrations/supabase/client";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+  generatePaginationItems
+} from "@/components/ui/pagination";
+import { NoDataRow, formatForExport } from './RegistrationTableHelpers';
 
-import React, { useState, useEffect } from 'react';
-import { RegistrationTableProps } from './RegistrationTableProps';
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { Download, Search, Filter, X, ChevronLeft, ChevronRight } from "lucide-react";
-import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
-import { formatDate } from "@/lib/utils";
+interface ChartData {
+  name: string;
+  value: number;
+}
+
+interface VoterData {
+  id: string;
+  full_name: string;
+  email: string;
+  organization: string;
+  date_of_birth: string;
+  gender: string;
+  region: string;
+  constituency: string;
+  identification_type: string;
+  identification_number: string;
+}
+
+interface FilterState {
+  fullName: string;
+  organization: string;
+  dateOfBirth: string;
+  gender: string;
+  region: string;
+  constituency: string;
+  identificationType: string;
+  identificationNumber: string;
+}
+
+interface RegistrationTableProps {
+  voterData: VoterData[];
+  filteredData: VoterData[];
+  regionData: ChartData[];
+  constituencyData: {[key: string]: ChartData[]};
+  onUpdateFilters: (filters: FilterState) => void;
+  filters: FilterState;
+  onDeleteSuccess?: () => void; // Prop to trigger parent refresh
+  currentPage?: number;
+  totalPages?: number;
+  pageSize?: number;
+  setPageSize?: (size: number) => void;
+  setCurrentPage?: (page: number) => void;
+  isLoading?: boolean;
+}
 
 const RegistrationTable: React.FC<RegistrationTableProps> = ({
   voterData,
   filteredData,
   regionData,
   constituencyData,
-  currentPage,
-  pageSize,
-  setCurrentPage,
-  setPageSize,
-  totalPages,
-  totalRecords,
+  onUpdateFilters,
   filters,
-  setFilters,
-  isLoading,
-  handleExcelExport
+  onDeleteSuccess,
+  currentPage: propCurrentPage,
+  totalPages: propTotalPages,
+  pageSize: propPageSize,
+  setPageSize: propSetPageSize,
+  setCurrentPage: propSetCurrentPage,
+  isLoading: propIsLoading
 }) => {
-  const [showFilters, setShowFilters] = useState(false);
-  const [visibleData, setVisibleData] = useState<any[]>([]);
+  const tableRef = useRef<HTMLDivElement>(null);
+  const [selectedRows, setSelectedRows] = useState<string[]>([]);
+  const [localData, setLocalData] = useState<VoterData[]>(filteredData);
   
-  // Calculate visible rows based on current page and page size
+  // Use props or local state for pagination
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isPageChanging, setIsPageChanging] = useState(false);
+  const [recordsPerPage, setRecordsPerPage] = useState(100);
+  
+  // Determine whether to use local or prop-based pagination
+  const useLocalPagination = !propCurrentPage && !propSetCurrentPage;
+  const effectiveCurrentPage = useLocalPagination ? currentPage : propCurrentPage || 1;
+  const effectiveSetCurrentPage = useLocalPagination ? setCurrentPage : propSetCurrentPage || setCurrentPage;
+  const effectivePageSize = useLocalPagination ? recordsPerPage : propPageSize || 100;
+  const effectiveSetPageSize = useLocalPagination ? setRecordsPerPage : propSetPageSize || setRecordsPerPage;
+  const isLoading = propIsLoading || false;
+  
+  // Update local data when filteredData changes
   useEffect(() => {
-    const startIndex = (currentPage - 1) * pageSize;
-    const endIndex = Math.min(startIndex + pageSize, filteredData.length);
-    setVisibleData(filteredData.slice(startIndex, endIndex));
-  }, [filteredData, currentPage, pageSize]);
+    setLocalData(filteredData);
+  }, [filteredData]);
   
-  // Handle filter changes
-  const handleFilterChange = (key: string, value: string) => {
-    setFilters({
+  // Filter handling functions
+  const handleFilterChange = (field: keyof FilterState, value: string) => {
+    onUpdateFilters({
       ...filters,
-      [key]: value
+      [field]: value
     });
   };
   
-  // Clear all filters
   const clearFilters = () => {
-    setFilters({
+    onUpdateFilters({
       fullName: '',
       organization: '',
       dateOfBirth: '',
@@ -59,329 +122,459 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     });
   };
   
-  // Handle page change
-  const handlePageChange = (newPage: number) => {
-    if (newPage >= 1 && newPage <= totalPages) {
-      setCurrentPage(newPage);
-    }
-  };
-  
-  // Generate page numbers for pagination
-  const getPageNumbers = () => {
-    const pages = [];
-    const maxVisiblePages = 5;
-    
-    if (totalPages <= maxVisiblePages) {
-      // Show all pages if total pages is less than max visible
-      for (let i = 1; i <= totalPages; i++) {
-        pages.push(i);
-      }
+  const toggleRowSelection = (id: string) => {
+    if (selectedRows.includes(id)) {
+      setSelectedRows(selectedRows.filter(rowId => rowId !== id));
     } else {
-      // Always show first page
-      pages.push(1);
-      
-      // Calculate start and end of visible page range
-      let startPage = Math.max(2, currentPage - Math.floor(maxVisiblePages / 2));
-      let endPage = Math.min(totalPages - 1, startPage + maxVisiblePages - 3);
-      
-      // Adjust if we're near the beginning
-      if (currentPage <= Math.floor(maxVisiblePages / 2) + 1) {
-        endPage = maxVisiblePages - 1;
-      }
-      
-      // Adjust if we're near the end
-      if (currentPage >= totalPages - Math.floor(maxVisiblePages / 2)) {
-        startPage = totalPages - maxVisiblePages + 2;
-      }
-      
-      // Add ellipsis after first page if needed
-      if (startPage > 2) {
-        pages.push('...');
-      }
-      
-      // Add visible page range
-      for (let i = startPage; i <= endPage; i++) {
-        pages.push(i);
-      }
-      
-      // Add ellipsis before last page if needed
-      if (endPage < totalPages - 1) {
-        pages.push('...');
-      }
-      
-      // Always show last page
-      pages.push(totalPages);
+      setSelectedRows([...selectedRows, id]);
     }
-    
-    return pages;
   };
   
+  const selectAllRows = () => {
+    if (selectedRows.length === paginatedData.length) {
+      setSelectedRows([]);
+    } else {
+      setSelectedRows(paginatedData.map(voter => voter.id));
+    }
+  };
+  
+  const getFilteredConstituencies = () => {
+    if (filters.region && constituencyData[filters.region]) {
+      return constituencyData[filters.region] || [];
+    }
+    
+    // If no region filter, combine all constituencies from all regions
+    const allConstituencies: ChartData[] = [];
+    Object.values(constituencyData).forEach(constituencies => {
+      if (Array.isArray(constituencies)) {
+        constituencies.forEach(constituency => {
+          // Avoid duplicates
+          if (!allConstituencies.some(item => item.name === constituency.name)) {
+            allConstituencies.push(constituency);
+          }
+        });
+      }
+    });
+    
+    return allConstituencies;
+  };
+  
+  // Updated export function to include row numbers
+  const handleExcelExport = () => {
+    // Create a CSV string with the filtered data
+    const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
+    let csvContent = headers;
+    
+    // Add the filtered data rows with full information (no redaction for admins)
+    filteredData.forEach((voter, index) => {
+      csvContent += `${index + 1},${formatForExport(voter)}\n`;
+    });
+    
+    // Create a blob and trigger download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement('a');
+    link.href = url;
+    link.download = `NYPG_Voter_Statistics_${new Date().toISOString().split('T')[0]}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    
+    toast({
+      title: "Export Successful",
+      description: `${filteredData.length} records have been exported to CSV format`,
+    });
+  };
+
+  // Updated print function to include row numbers
+  const handlePrint = () => {
+    if (tableRef.current) {
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write('<html><head><title>Voter Registration Data</title>');
+        printWindow.document.write('<style>');
+        printWindow.document.write('table { border-collapse: collapse; width: 100%; }');
+        printWindow.document.write('th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }');
+        printWindow.document.write('th { background-color: #f2f2f2; }');
+        printWindow.document.write('</style>');
+        printWindow.document.write('</head><body>');
+        printWindow.document.write('<h1>NYPG Voter Registration Data</h1>');
+        printWindow.document.write('<h3>Exported on ' + new Date().toLocaleDateString() + '</h3>');
+        printWindow.document.write('<table>');
+        
+        // Table headers with row number
+        printWindow.document.write('<tr>');
+        printWindow.document.write('<th>No.</th>');
+        printWindow.document.write('<th>Full Name</th>');
+        printWindow.document.write('<th>Email</th>'); // Now including email for admin print
+        printWindow.document.write('<th>Organization</th>');
+        printWindow.document.write('<th>Date of Birth</th>');
+        printWindow.document.write('<th>Gender</th>');
+        printWindow.document.write('<th>Region</th>');
+        printWindow.document.write('<th>Constituency</th>');
+        printWindow.document.write('<th>ID Type</th>');
+        printWindow.document.write('<th>ID Number</th>');
+        printWindow.document.write('</tr>');
+        
+        // Table data with full information (no masking for admins)
+        filteredData.forEach((voter, index) => {
+          const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+          const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
+                        voter.identification_type === 'identification_document' ? 'ID Document' :
+                        voter.identification_type === 'passport_number' ? 'Passport' : '';
+          
+          printWindow.document.write('<tr>');
+          printWindow.document.write(`<td>${index + 1}</td>`); // Row number
+          printWindow.document.write(`<td>${voter.full_name}</td>`);
+          printWindow.document.write(`<td>${voter.email}</td>`); // Show full email
+          printWindow.document.write(`<td>${voter.organization}</td>`);
+          printWindow.document.write(`<td>${dob}</td>`);
+          printWindow.document.write(`<td>${voter.gender || ''}</td>`);
+          printWindow.document.write(`<td>${voter.region || ''}</td>`);
+          printWindow.document.write(`<td>${voter.constituency || ''}</td>`);
+          printWindow.document.write(`<td>${idType}</td>`);
+          printWindow.document.write(`<td>${voter.identification_number}</td>`); // Show full ID number
+          printWindow.document.write('</tr>');
+        });
+        
+        printWindow.document.write('</table>');
+        printWindow.document.write('<p>Total records: ' + filteredData.length + '</p>');
+        printWindow.document.write('</body></html>');
+        printWindow.document.close();
+        printWindow.print();
+      }
+    }
+  };
+  
+  // Optimized pagination for large datasets
+  const indexOfLastRecord = effectiveCurrentPage * effectivePageSize;
+  const indexOfFirstRecord = indexOfLastRecord - effectivePageSize;
+  const paginatedData = localData.slice(indexOfFirstRecord, indexOfLastRecord);
+  
+  const totalPages = Math.ceil(localData.length / effectivePageSize);
+  
+  // Improved page change handler with animation
+  const changePage = (newPage: number) => {
+    if (newPage < 1 || newPage > totalPages || newPage === effectiveCurrentPage) return;
+    
+    setIsPageChanging(true);
+    effectiveSetCurrentPage(newPage);
+    
+    // Add slight delay for visual feedback
+    setTimeout(() => {
+      setIsPageChanging(false);
+    }, 300);
+  };
+  
+  // Use the new generatePaginationItems function for better pagination with large datasets
+  const pageNumbers = generatePaginationItems(effectiveCurrentPage, totalPages);
+  
+  // Reset to first page when filters change
+  useEffect(() => {
+    effectiveSetCurrentPage(1);
+  }, [filters, effectiveSetCurrentPage]);
+  
+  // Reset selected rows when page changes or data changes
+  useEffect(() => {
+    setSelectedRows([]);
+  }, [effectiveCurrentPage, localData]);
+  
+  // Set up real-time subscription for deleted rows with privacy protection
+  useEffect(() => {
+    // Avoiding direct logging of sensitive data
+    console.log("Setting up real-time subscription for voter updates");
+    
+    const channel = supabase
+      .channel('voter-delete-events')
+      .on('postgres_changes', {
+        event: 'DELETE',
+        schema: 'public',
+        table: 'voters'
+      }, (payload) => {
+        console.log("Received real-time DELETE event");
+        
+        // Update local data immediately when a delete happens elsewhere
+        if (payload.old && payload.old.id) {
+          setLocalData(prev => prev.filter(voter => voter.id !== payload.old.id));
+        }
+      })
+      .subscribe((status) => {
+        console.log("Voter delete subscription status:", status);
+        if (status === 'CHANNEL_ERROR') {
+          console.error("Error with delete event subscription");
+          toast({
+            title: "Sync Error",
+            description: "Realtime updates for deletions may not work. Please refresh if you see inconsistencies.",
+            variant: "destructive",
+          });
+        }
+      });
+      
+    return () => {
+      console.log("Cleaning up delete events subscription");
+      try {
+        supabase.removeChannel(channel);
+      } catch (error) {
+        console.error("Error removing delete events channel");
+      }
+    };
+  }, []);
+  
+  // Additional data loading indicator for large datasets
+  const renderLoadingState = () => {
+    if (!isLoading) return null;
+    
+    return (
+      <div className="absolute inset-0 bg-white/50 flex items-center justify-center z-10">
+        <div className="flex flex-col items-center">
+          <div className="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-current border-r-transparent align-[-0.125em] motion-reduce:animate-[spin_1.5s_linear_infinite]"></div>
+          <div className="mt-4 text-lg">Processing data...</div>
+        </div>
+      </div>
+    );
+  };
+
+  // Updated VoterRow component - with row number
+  const VoterRow = ({ voter, index }) => {
+    const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+    const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
+                  voter.identification_type === 'identification_document' ? 'ID Document' :
+                  voter.identification_type === 'passport_number' ? 'Passport' : '';
+    
+    return (
+      <TableRow key={voter.id}>
+        <TableCell className="font-medium text-center">{indexOfFirstRecord + index + 1}</TableCell>
+        <TableCell>{voter.full_name}</TableCell>
+        <TableCell>{voter.organization}</TableCell>
+        <TableCell>{dob}</TableCell>
+        <TableCell>{voter.gender}</TableCell>
+        <TableCell>{voter.region}</TableCell>
+        <TableCell>{voter.constituency}</TableCell>
+        <TableCell>{idType}</TableCell>
+        <TableCell>{voter.identification_number}</TableCell>
+      </TableRow>
+    );
+  };
+  
+  // Page size options for large datasets
+  const pageSizeOptions = [50, 100, 250, 500, 1000];
+
   return (
-    <Card className="w-full">
-      <CardHeader>
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center">
-          <div>
-            <CardTitle>Voter Registrations</CardTitle>
-            <CardDescription>
-              {isLoading ? (
-                <Skeleton className="h-4 w-[250px]" />
-              ) : (
-                `Showing ${Math.min(filteredData.length, 1 + (currentPage - 1) * pageSize)}-${Math.min(currentPage * pageSize, filteredData.length)} of ${totalRecords} total registrations`
-              )}
-            </CardDescription>
-          </div>
-          <div className="flex gap-2 mt-4 md:mt-0">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={() => setShowFilters(!showFilters)}
-            >
-              {showFilters ? <X className="h-4 w-4 mr-2" /> : <Filter className="h-4 w-4 mr-2" />}
-              {showFilters ? 'Hide Filters' : 'Show Filters'}
-            </Button>
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={handleExcelExport}
-              disabled={isLoading || filteredData.length === 0}
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export CSV
-            </Button>
-          </div>
+    <Card className="p-6 mb-8 relative">
+      {renderLoadingState()}
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
+        <h2 className="text-xl font-semibold">Registration Data</h2>
+        <div className="flex flex-wrap items-center gap-2">
+          <Button variant="outline" onClick={clearFilters} className="flex items-center gap-2">
+            <Filter size={16} />
+            Clear Filters
+          </Button>
+          <Button variant="outline" onClick={handleExcelExport} className="flex items-center gap-2">
+            <Download size={16} />
+            Export CSV
+          </Button>
+          <Button variant="outline" onClick={handlePrint} className="flex items-center gap-2" id="printTable">
+            <Printer size={16} />
+            Print
+          </Button>
         </div>
-      </CardHeader>
+      </div>
       
-      {showFilters && (
-        <CardContent className="border-b pb-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            <div>
-              <label className="text-sm font-medium mb-1 block">Full Name</label>
-              <Input
-                placeholder="Search by name"
-                value={filters.fullName}
-                onChange={(e) => handleFilterChange('fullName', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Organization</label>
-              <Input
-                placeholder="Search by organization"
-                value={filters.organization}
-                onChange={(e) => handleFilterChange('organization', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Date of Birth</label>
-              <Input
-                type="date"
-                value={filters.dateOfBirth}
-                onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Gender</label>
-              <Select 
-                value={filters.gender} 
-                onValueChange={(value) => handleFilterChange('gender', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All genders" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All genders</SelectItem>
-                  <SelectItem value="male">Male</SelectItem>
-                  <SelectItem value="female">Female</SelectItem>
-                  <SelectItem value="other">Other</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Region</label>
-              <Select 
-                value={filters.region} 
-                onValueChange={(value) => handleFilterChange('region', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All regions" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All regions</SelectItem>
-                  {regionData.map((region) => (
-                    <SelectItem key={region.name} value={region.name}>
-                      {region.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">Constituency</label>
-              <Input
-                placeholder="Search by constituency"
-                value={filters.constituency}
-                onChange={(e) => handleFilterChange('constituency', e.target.value)}
-              />
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">ID Type</label>
-              <Select 
-                value={filters.identificationType} 
-                onValueChange={(value) => handleFilterChange('identificationType', value)}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="All ID types" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="">All ID types</SelectItem>
-                  <SelectItem value="National ID">National ID</SelectItem>
-                  <SelectItem value="Passport">Passport</SelectItem>
-                  <SelectItem value="Voter's Card">Voter's Card</SelectItem>
-                  <SelectItem value="Driver's License">Driver's License</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <div>
-              <label className="text-sm font-medium mb-1 block">ID Number</label>
-              <Input
-                placeholder="Search by ID number"
-                value={filters.identificationNumber}
-                onChange={(e) => handleFilterChange('identificationNumber', e.target.value)}
-              />
-            </div>
-          </div>
-          <div className="flex justify-end mt-4">
-            <Button 
-              variant="outline" 
-              size="sm" 
-              onClick={clearFilters}
-            >
-              Clear Filters
-            </Button>
-          </div>
-        </CardContent>
-      )}
-      
-      <CardContent className="p-0">
-        <div className="overflow-x-auto">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead className="w-14">No.</TableHead>
-                <TableHead>Full Name</TableHead>
-                <TableHead>Organization</TableHead>
-                <TableHead>Date of Birth</TableHead>
-                <TableHead>Gender</TableHead>
-                <TableHead>Region</TableHead>
-                <TableHead>Constituency</TableHead>
-                <TableHead>ID Type</TableHead>
-                <TableHead>ID Number</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                // Loading skeletons
-                Array(pageSize).fill(0).map((_, index) => (
-                  <TableRow key={`skeleton-${index}`}>
-                    {Array(9).fill(0).map((_, cellIndex) => (
-                      <TableCell key={`cell-${index}-${cellIndex}`}>
-                        <Skeleton className="h-4 w-full" />
-                      </TableCell>
+      <div className={`overflow-x-auto transition-opacity duration-300 ${isPageChanging ? 'opacity-70' : 'opacity-100'}`} ref={tableRef}>
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="w-16 text-center">
+                <div className="space-y-1">
+                  <div className="flex items-center justify-center">
+                    <ListOrdered size={16} className="mr-1" />
+                    No.
+                  </div>
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="space-y-1">
+                  <div>Full Name</div>
+                  <Input 
+                    placeholder="Filter name..." 
+                    className="h-8 w-full" 
+                    value={filters.fullName}
+                    onChange={(e) => handleFilterChange('fullName', e.target.value)}
+                  />
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="space-y-1">
+                  <div>Organization</div>
+                  <Input 
+                    placeholder="Filter organization..." 
+                    className="h-8 w-full" 
+                    value={filters.organization}
+                    onChange={(e) => handleFilterChange('organization', e.target.value)}
+                  />
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="space-y-1">
+                  <div>Date of Birth</div>
+                  <Input 
+                    placeholder="YYYY-MM-DD" 
+                    className="h-8 w-full"
+                    pattern="\d{4}-\d{2}-\d{2}"
+                    value={filters.dateOfBirth}
+                    onChange={(e) => handleFilterChange('dateOfBirth', e.target.value)}
+                  />
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="space-y-1">
+                  <div>Gender</div>
+                  <select 
+                    className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                    value={filters.gender}
+                    onChange={(e) => handleFilterChange('gender', e.target.value)}
+                  >
+                    <option value="">All</option>
+                    <option value="male">Male</option>
+                    <option value="female">Female</option>
+                  </select>
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="space-y-1">
+                  <div>Region</div>
+                  <select 
+                    className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                    value={filters.region}
+                    onChange={(e) => handleFilterChange('region', e.target.value)}
+                  >
+                    <option value="">All Regions</option>
+                    {regionData.map((region) => (
+                      <option key={region.name} value={region.name}>
+                        {region.name}
+                      </option>
                     ))}
-                  </TableRow>
-                ))
-              ) : visibleData.length > 0 ? (
-                // Actual data rows
-                visibleData.map((voter, index) => (
-                  <TableRow key={voter.id}>
-                    <TableCell className="font-medium text-center">
-                      {voter.rowNumber || ((currentPage - 1) * pageSize + index + 1)}
-                    </TableCell>
-                    <TableCell className="font-medium">{voter.full_name}</TableCell>
-                    <TableCell>{voter.organization}</TableCell>
-                    <TableCell>{voter.date_of_birth}</TableCell>
-                    <TableCell>
-                      <Badge variant="outline" className="capitalize">
-                        {voter.gender}
-                      </Badge>
-                    </TableCell>
-                    <TableCell>{voter.region}</TableCell>
-                    <TableCell>{voter.constituency}</TableCell>
-                    <TableCell>{voter.identification_type}</TableCell>
-                    <TableCell>{voter.identification_number}</TableCell>
-                  </TableRow>
-                ))
-              ) : (
-                // No data message
-                <TableRow>
-                  <TableCell colSpan={9} className="text-center py-8">
-                    No registrations found matching your criteria
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-      </CardContent>
+                  </select>
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="space-y-1">
+                  <div>Constituency</div>
+                  <Input 
+                    placeholder="Filter constituency..." 
+                    className="h-8 w-full" 
+                    value={filters.constituency}
+                    onChange={(e) => handleFilterChange('constituency', e.target.value)}
+                  />
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="space-y-1">
+                  <div>ID Type</div>
+                  <select 
+                    className="h-8 w-full rounded-md border border-input bg-background px-3 py-1 text-sm ring-offset-background"
+                    value={filters.identificationType}
+                    onChange={(e) => handleFilterChange('identificationType', e.target.value)}
+                  >
+                    <option value="">All</option>
+                    <option value="birth_certificate">Birth Certificate</option>
+                    <option value="identification_document">ID Document</option>
+                    <option value="passport_number">Passport</option>
+                  </select>
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="space-y-1">
+                  <div>ID Number</div>
+                  <Input 
+                    placeholder="Filter ID..." 
+                    className="h-8 w-full"
+                    value={filters.identificationNumber}
+                    onChange={(e) => handleFilterChange('identificationNumber', e.target.value)}
+                  />
+                </div>
+              </TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {paginatedData.length === 0 ? (
+              <NoDataRow />
+            ) : (
+              paginatedData.map((voter, index) => (
+                <VoterRow 
+                  key={voter.id} 
+                  voter={voter}
+                  index={index}
+                />
+              ))
+            )}
+          </TableBody>
+        </Table>
+      </div>
       
-      <CardFooter className="flex flex-col sm:flex-row items-center justify-between p-4 gap-4">
-        <div className="flex items-center gap-2">
-          <span className="text-sm text-muted-foreground">Rows per page:</span>
-          <Select 
-            value={pageSize.toString()} 
-            onValueChange={(value) => setPageSize(Number(value))}
+      {/* Page size selector */}
+      <div className="flex items-center justify-between mt-4">
+        <div className="flex items-center space-x-2">
+          <span className="text-sm">Rows per page:</span>
+          <select 
+            className="h-8 rounded-md border border-input bg-background px-2 py-1 text-sm ring-offset-background"
+            value={effectivePageSize}
+            onChange={(e) => effectiveSetPageSize(Number(e.target.value))}
           >
-            <SelectTrigger className="w-[80px]">
-              <SelectValue placeholder={pageSize} />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="10">10</SelectItem>
-              <SelectItem value="25">25</SelectItem>
-              <SelectItem value="50">50</SelectItem>
-              <SelectItem value="100">100</SelectItem>
-            </SelectContent>
-          </Select>
+            {pageSizeOptions.map(size => (
+              <option key={size} value={size}>{size}</option>
+            ))}
+          </select>
         </div>
         
-        <div className="flex items-center gap-1">
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => handlePageChange(currentPage - 1)}
-            disabled={currentPage === 1 || isLoading}
-          >
-            <ChevronLeft className="h-4 w-4" />
-          </Button>
-          
-          {getPageNumbers().map((page, index) => (
-            typeof page === 'number' ? (
-              <Button
-                key={`page-${index}`}
-                variant={currentPage === page ? "default" : "outline"}
-                size="sm"
-                className="w-8 h-8 p-0"
-                onClick={() => handlePageChange(page)}
-                disabled={isLoading}
-              >
-                {page}
-              </Button>
-            ) : (
-              <span key={`ellipsis-${index}`} className="px-2">
-                {page}
-              </span>
-            )
-          ))}
-          
-          <Button
-            variant="outline"
-            size="icon"
-            onClick={() => handlePageChange(currentPage + 1)}
-            disabled={currentPage === totalPages || isLoading}
-          >
-            <ChevronRight className="h-4 w-4" />
-          </Button>
+        <div className="text-sm text-gray-600">
+          Showing {indexOfFirstRecord + 1} to {Math.min(indexOfLastRecord, localData.length)} of {localData.length} registrations
+          {localData.length !== voterData.length && ` (filtered from ${voterData.length} total)`}
         </div>
-      </CardFooter>
+      </div>
+      
+      {/* Enhanced pagination controls with better state feedback */}
+      {totalPages > 1 && (
+        <Pagination className="mt-4">
+          <PaginationContent>
+            <PaginationItem>
+              <PaginationPrevious 
+                onClick={() => changePage(effectiveCurrentPage - 1)}
+                className={effectiveCurrentPage === 1 ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+            
+            {pageNumbers.map((pageNumber, i) => (
+              pageNumber === 'ellipsis' ? (
+                <PaginationItem key={`ellipsis-${i}`}>
+                  <PaginationEllipsis />
+                </PaginationItem>
+              ) : (
+                <PaginationItem key={pageNumber}>
+                  <PaginationLink
+                    isActive={effectiveCurrentPage === pageNumber}
+                    onClick={() => changePage(pageNumber as number)}
+                    className={`cursor-pointer transition-all ${
+                      isPageChanging ? 'bg-opacity-70' : ''
+                    }`}
+                    aria-current={effectiveCurrentPage === pageNumber ? 'page' : undefined}
+                  >
+                    {pageNumber}
+                  </PaginationLink>
+                </PaginationItem>
+              )
+            ))}
+            
+            <PaginationItem>
+              <PaginationNext 
+                onClick={() => changePage(effectiveCurrentPage + 1)}
+                className={effectiveCurrentPage === totalPages ? "pointer-events-none opacity-50" : "cursor-pointer"}
+              />
+            </PaginationItem>
+          </PaginationContent>
+        </Pagination>
+      )}
     </Card>
   );
 };

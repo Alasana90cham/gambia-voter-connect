@@ -83,27 +83,7 @@ export function throttle<T extends (...args: any[]) => any>(
   };
 }
 
-// Generate unique ID - Enhanced to be more robust with multiple sources of entropy
+// Generate unique ID
 export function uniqueId(prefix = ''): string {
-  const timestamp = Date.now().toString(36);
-  const randomStr = Math.random().toString(36).substring(2, 10);
-  return `${prefix}${timestamp}${randomStr}`;
+  return `${prefix}${Math.random().toString(36).substring(2, 11)}`;
 }
-
-// Format date to a human-readable string (YYYY-MM-DD)
-export const formatDate = (dateString: string | Date): string => {
-  if (!dateString) return '';
-  
-  const date = typeof dateString === 'string' ? new Date(dateString) : dateString;
-  
-  // Check if date is valid
-  if (isNaN(date.getTime())) return '';
-  
-  // Format as YYYY-MM-DD
-  const year = date.getFullYear();
-  const month = String(date.getMonth() + 1).padStart(2, '0');
-  const day = String(date.getDate()).padStart(2, '0');
-  
-  return `${year}-${month}-${day}`;
-};
-

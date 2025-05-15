@@ -1,5 +1,5 @@
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
 import AdminLogin from '@/components/statistics/AdminLogin';
@@ -7,41 +7,17 @@ import { StatisticsProvider } from '@/components/statistics/StatisticsContext';
 import StatisticsContent from '@/components/statistics/StatisticsContent';
 import { toast } from "@/components/ui/use-toast";
 import { supabase } from "@/integrations/supabase/client";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useToast } from "@/hooks/use-toast";
-import { DataIntegrityMonitor } from '@/components/statistics/DataIntegrityMonitor';
 
 // Session timeout in milliseconds (2 hours)
 const SESSION_TIMEOUT = 2 * 60 * 60 * 1000;
 
 const Statistics = () => {
-  // State declarations - all grouped together for hook consistency
   const [isAdmin, setIsAdmin] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [inactivityTimer, setInactivityTimer] = useState<NodeJS.Timeout | null>(null);
-  const [connectionStatus, setConnectionStatus] = useState<'connected' | 'connecting' | 'disconnected'>('connecting');
-  const [dataRefresh, setDataRefresh] = useState<number>(0);
 
-  const { toast } = useToast();
-
-  // Handle logout with proper dependency management to avoid hook issues
-  const handleLogout = useCallback(() => {
-    localStorage.removeItem('adminSession');
-    setIsAdmin(false);
-    
-    if (inactivityTimer) {
-      clearTimeout(inactivityTimer);
-      setInactivityTimer(null);
-    }
-    
-    toast({
-      title: "Logged Out",
-      description: "You have been logged out successfully.",
-    });
-  }, [inactivityTimer, toast]);
-
-  // Reset inactivity timer with proper dependency array
-  const resetInactivityTimer = useCallback(() => {
+  // Reset the inactivity timer
+  const resetInactivityTimer = () => {
     // Clear existing timer if any
     if (inactivityTimer) {
       clearTimeout(inactivityTimer);
@@ -57,50 +33,9 @@ const Statistics = () => {
     }, SESSION_TIMEOUT);
     
     setInactivityTimer(timer);
-  }, [inactivityTimer, handleLogout, toast]);
+  };
 
-  // Improved connection status check with more robust error handling
-  const checkConnectionStatus = useCallback(async () => {
-    try {
-      setConnectionStatus('connecting');
-      const { error } = await supabase.from('voters').select('count').limit(1);
-      
-      if (error) {
-        console.error('Connection check failed:', error);
-        setConnectionStatus('disconnected');
-        toast({
-          title: "Connection Issue",
-          description: "Having trouble connecting to the database. Will retry automatically.",
-          variant: "destructive",
-        });
-      } else {
-        setConnectionStatus('connected');
-      }
-    } catch (e) {
-      console.error('Connection check exception:', e);
-      setConnectionStatus('disconnected');
-    }
-  }, [toast]);
-
-  // Enhanced data recovery handler to ensure numbers are updated properly
-  const handleDataRecovery = useCallback(() => {
-    // Increment data refresh to trigger reloads of statistics data
-    setDataRefresh(prev => prev + 1);
-    console.log("Data recovery triggered in Statistics, refreshing data", dataRefresh + 1);
-    
-    toast({
-      title: "Data Recovered",
-      description: "Statistics updated with recovered data.",
-    });
-  }, [dataRefresh, toast]);
-
-  // Login success handler with proper dependencies
-  const handleLoginSuccess = useCallback(() => {
-    setIsAdmin(true);
-    resetInactivityTimer();
-  }, [resetInactivityTimer]);
-
-  // Setup event listeners for user activity - no changes needed
+  // Setup event listeners for user activity
   useEffect(() => {
     if (isAdmin) {
       // Reset timer on user activity
@@ -129,24 +64,9 @@ const Statistics = () => {
         });
       };
     }
-  }, [isAdmin, inactivityTimer, resetInactivityTimer]);
+  }, [isAdmin]);
 
-  // Enhanced connection status monitoring
-  useEffect(() => {
-    // Check connection immediately
-    checkConnectionStatus();
-    
-    // Then check every 30 seconds
-    const intervalId = setInterval(() => {
-      if (connectionStatus !== 'connected') {
-        checkConnectionStatus();
-      }
-    }, 30000);
-    
-    return () => clearInterval(intervalId);
-  }, [checkConnectionStatus, connectionStatus]);
-
-  // Check for existing admin session
+  // Check for existing admin session on component mount
   useEffect(() => {
     const checkExistingSession = () => {
       try {
@@ -219,53 +139,27 @@ const Statistics = () => {
     };
     
     checkSupabaseConnection();
-  }, [toast]);
+  }, []);
 
-  // Connection recovery for offline scenarios
-  useEffect(() => {
-    const handleOnline = () => {
-      toast({
-        title: "Connection Restored",
-        description: "Your internet connection is back online.",
-      });
-      checkConnectionStatus();
-    };
-    
-    const handleOffline = () => {
-      setConnectionStatus('disconnected');
-      toast({
-        title: "Connection Lost",
-        description: "Your internet connection is offline. Changes will be queued until connection is restored.",
-        variant: "destructive",
-      });
-    };
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [toast, checkConnectionStatus]);
+  const handleLoginSuccess = () => {
+    setIsAdmin(true);
+    resetInactivityTimer();
+  };
 
-  // Display connection status indicator
-  const ConnectionIndicator = () => (
-    <div className="fixed bottom-4 right-4 z-50 flex items-center gap-2 bg-white dark:bg-gray-800 p-2 rounded-md shadow-lg">
-      <div 
-        className={`w-3 h-3 rounded-full ${
-          connectionStatus === 'connected' ? 'bg-green-500' : 
-          connectionStatus === 'connecting' ? 'bg-amber-500 animate-pulse' : 
-          'bg-red-500'
-        }`} 
-      />
-      <span className="text-xs">
-        {connectionStatus === 'connected' ? 'Online' : 
-         connectionStatus === 'connecting' ? 'Connecting...' : 
-         'Offline (changes will be queued)'}
-      </span>
-    </div>
-  );
+  const handleLogout = () => {
+    localStorage.removeItem('adminSession');
+    setIsAdmin(false);
+    
+    if (inactivityTimer) {
+      clearTimeout(inactivityTimer);
+      setInactivityTimer(null);
+    }
+    
+    toast({
+      title: "Logged Out",
+      description: "You have been logged out successfully.",
+    });
+  };
 
   // Show loading state while checking for existing session
   if (isInitializing) {
@@ -294,27 +188,21 @@ const Statistics = () => {
           <AdminLogin onLoginSuccess={handleLoginSuccess} />
         </main>
         <Footer />
-        <ConnectionIndicator />
-        <DataIntegrityMonitor onRecover={handleDataRecovery} />
       </div>
     );
   }
 
-  // The key prop here ensures StatisticsProvider remounts when dataRefresh changes,
-  // forcing a complete refresh of all statistics data
   return (
     <div className="min-h-screen flex flex-col">
       <Header />
       
-      <StatisticsProvider key={`stats-provider-${dataRefresh}`}>
+      <StatisticsProvider>
         <main className="flex-grow">
           <StatisticsContent onLogout={handleLogout} />
         </main>
       </StatisticsProvider>
       
       <Footer />
-      <ConnectionIndicator />
-      <DataIntegrityMonitor onRecover={handleDataRecovery} />
     </div>
   );
 };
