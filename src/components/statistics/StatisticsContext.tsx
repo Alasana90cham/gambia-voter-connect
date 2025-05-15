@@ -1,17 +1,12 @@
 
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback, useMemo } from 'react';
-import { fetchAdmins, fetchVoterData } from '@/data/constituencies';
 import { toast } from "@/components/ui/use-toast";
 import { UserRole } from "@/types/form";
-import { supabase, fetchPaginated, TableName } from "@/integrations/supabase/client";
-import { debounce } from "@/lib/utils";
-import { 
-  getVisibleRows, 
-  processBatch, 
-  generateCsvContent, 
-  downloadCsv 
-} from './RegistrationTableHelpers';
 import { FilterState } from './RegistrationTableProps';
+import { processChartData } from './utils/chartDataUtils';
+import { loadVoterData, loadAdmins, setupRealtimeSubscriptions } from './utils/dataLoadingUtils';
+import { createDebouncedFilterFn } from './utils/filterUtils';
+import { handleExcelExport as exportToExcel } from './utils/exportUtils';
 
 export interface ChartData {
   name: string;
@@ -85,125 +80,28 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   const [lastFetchTime, setLastFetchTime] = useState<Date | null>(null);
   const [updateCount, setUpdateCount] = useState(0);
   
-  // Process data for charts with optimization for large datasets
-  const processChartData = useCallback((voters: any[]) => {
-    if (!voters || voters.length === 0) return;
+  // Helper function to update state after filtering
+  const updateFilterResults = useCallback((result: any[]) => {
+    console.log(`Updating filtered results: ${result.length} records after filtering`);
+    setFilteredData(result);
+    setTotalRecords(result.length);
+    setTotalPages(Math.ceil(result.length / pageSize));
+    setCurrentPage(1); // Reset to first page when filters change
+    setIsLoading(false);
     
-    console.log(`Processing chart data for ${voters.length} records`);
-    
-    // Use direct approach for better performance with large datasets
-    const genderMap = new Map<string, number>();
-    const regionMap = new Map<string, number>();
-    const constituencyMap = new Map<string, Map<string, number>>();
-    
-    // Process all data directly for accurate chart representation
-    voters.forEach(voter => {
-      // Process gender data
-      const gender = voter.gender || 'Unknown';
-      genderMap.set(gender, (genderMap.get(gender) || 0) + 1);
-      
-      // Process region data
-      const region = voter.region || 'Unknown';
-      regionMap.set(region, (regionMap.get(region) || 0) + 1);
-      
-      // Process constituency data
-      const constituency = voter.constituency || 'Unknown';
-      
-      if (!constituencyMap.has(region)) {
-        constituencyMap.set(region, new Map<string, number>());
-      }
-      
-      const regionConstituencies = constituencyMap.get(region)!;
-      regionConstituencies.set(constituency, (regionConstituencies.get(constituency) || 0) + 1);
-    });
-    
-    // Convert maps to required format
-    const genderChartData: ChartData[] = Array.from(genderMap.entries()).map(([name, value]) => ({
-      name: name.charAt(0).toUpperCase() + name.slice(1),
-      value
-    }));
-    
-    const regionChartData: ChartData[] = Array.from(regionMap.entries()).map(([name, value]) => ({
-      name,
-      value
-    }));
-    
-    const constituencyChartData: {[key: string]: ChartData[]} = {};
-    constituencyMap.forEach((constituencies, region) => {
-      constituencyChartData[region] = Array.from(constituencies.entries()).map(([name, value]) => ({
-        name,
-        value
-      }));
-    });
-    
-    // Update chart data state
-    setGenderData(genderChartData);
-    setRegionData(regionChartData);
-    setConstituencyData(constituencyChartData);
-    
-    console.log("Chart data processing completed successfully");
-  }, []);
-
+    // Also update chart data based on filtered results
+    const chartData = processChartData(result);
+    setGenderData(chartData.genderData);
+    setRegionData(chartData.regionData);
+    setConstituencyData(chartData.constituencyData);
+  }, [pageSize]);
+  
   // Load voter data with error handling
-  const loadVoterData = useCallback(async () => {
+  const fetchVoterData = useCallback(async () => {
     setIsLoading(true);
     
     try {
-      console.log("Starting ultra-reliable voter data fetch with NO LIMITS");
-      
-      // First attempt: Use enhanced fetchPaginated function with improved reliability
-      let voters;
-      let attemptCount = 0;
-      const maxAttempts = 3;
-      
-      while (attemptCount < maxAttempts) {
-        try {
-          console.log(`Fetch attempt ${attemptCount + 1}/${maxAttempts}`);
-          voters = await fetchPaginated('voters', {
-            orderBy: 'created_at',
-            ascending: false
-          });
-          
-          if (voters && voters.length > 0) {
-            break;
-          }
-          
-          attemptCount++;
-        } catch (error) {
-          console.error(`Error on fetch attempt ${attemptCount + 1}:`, error);
-          attemptCount++;
-          
-          if (attemptCount >= maxAttempts) {
-            throw error;
-          }
-          
-          // Add exponential backoff delay between attempts
-          await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attemptCount - 1)));
-        }
-      }
-      
-      // FALLBACK MECHANISM: If fetchPaginated fails, use direct query as last resort
-      if (!voters || voters.length === 0) {
-        console.warn("Primary fetch method failed, trying direct query fallback");
-        
-        try {
-          const { data: directData, error: directError } = await supabase
-            .from('voters')
-            .select('*')
-            .order('created_at', { ascending: false });
-            
-          if (directError) {
-            console.error("Direct query fallback error:", directError);
-          } else if (directData && directData.length > 0) {
-            console.log(`Fallback method succeeded: retrieved ${directData.length} records`);
-            voters = directData;
-          }
-        } catch (fallbackError) {
-          console.error("Fallback query failed:", fallbackError);
-        }
-      }
-      
-      console.log(`Data fetch complete: ${voters?.length || 0} records retrieved`);
+      const voters = await loadVoterData();
       
       if (voters && voters.length > 0) {
         // Record fetch time for reference
@@ -218,7 +116,10 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         setTotalPages(Math.ceil(voters.length / pageSize));
         
         // Process chart data with all records
-        processChartData(voters);
+        const chartData = processChartData(voters);
+        setGenderData(chartData.genderData);
+        setRegionData(chartData.regionData);
+        setConstituencyData(chartData.constituencyData);
         
         toast({
           title: "Data Loaded Successfully",
@@ -254,281 +155,21 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     } finally {
       setIsLoading(false);
     }
-  }, [pageSize, processChartData]);
+  }, [pageSize]);
   
-  // Load admins with enhanced error handling and retry
-  const loadAdmins = useCallback(async () => {
-    let attempts = 0;
-    const maxAttempts = 3;
-    
-    while (attempts < maxAttempts) {
-      try {
-        const admins = await fetchAdmins();
-        console.log("Fetched admin data:", admins?.length || 0, "records");
-        setAdminList(admins || []);
-        break;
-      } catch (error) {
-        attempts++;
-        console.error(`Error loading admins (attempt ${attempts}/${maxAttempts}):`, error);
-        
-        if (attempts >= maxAttempts) {
-          toast({
-            title: "Admin Data Error",
-            description: "Failed to load admin information after multiple attempts",
-            variant: "destructive",
-          });
-          break;
-        }
-        
-        // Exponential backoff
-        await new Promise(resolve => setTimeout(resolve, 1000 * Math.pow(2, attempts - 1)));
-      }
+  // Load admins data
+  const fetchAdminData = useCallback(async () => {
+    try {
+      const admins = await loadAdmins();
+      setAdminList(admins);
+    } catch (error) {
+      console.error("Error loading admin data:", error);
     }
   }, []);
 
-  // Setup realtime subscriptions
-  const setupRealtimeSubscriptions = useCallback(() => {
-    console.log("Setting up realtime subscriptions for unlimited data");
-    
-    // Create channel with improved error handling
-    const votersChannel = supabase
-      .channel('voters-changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'voters'
-      }, (payload) => {
-        console.log(`Voter data change detected (${payload.eventType}), refreshing all data`);
-        // Always reload all data to ensure charts reflect current state
-        loadVoterData();
-      })
-      .subscribe((status) => {
-        console.log(`Voters subscription status: ${status}`);
-        
-        if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to voter changes');
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Error with voter changes subscription');
-          toast({
-            title: "Sync Error",
-            description: "Unable to subscribe to data changes. Changes may not update in real-time.",
-            variant: "destructive",
-          });
-        }
-      });
-      
-    // Create channel for admin changes
-    const adminsChannel = supabase
-      .channel('admin-changes')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'admins'
-      }, (payload) => {
-        console.log(`Admin data change detected (${payload.eventType})`);
-        loadAdmins();
-      })
-      .subscribe();
-    
-    return () => {
-      supabase.removeChannel(votersChannel);
-      supabase.removeChannel(adminsChannel);
-    };
-  }, [loadVoterData, loadAdmins]);
-
-  // Delete success handler
-  const handleDeleteSuccess = useCallback(async () => {
-    console.log("Delete operation completed, performing full data refresh");
-    setIsLoading(true);
-    
-    try {
-      // Force full reload with delay to ensure database consistency
-      await new Promise(resolve => setTimeout(resolve, 500));
-      await loadVoterData();
-      await loadAdmins();
-      
-      toast({
-        title: "Data Refreshed",
-        description: "The latest data has been loaded from the database",
-      });
-    } catch (error) {
-      console.error("Error refreshing data after deletion:", error);
-      toast({
-        title: "Refresh Failed",
-        description: "Unable to refresh data. Please reload the page.",
-        variant: "destructive",
-      });
-    } finally {
-      setIsLoading(false);
-    }
-  }, [loadVoterData, loadAdmins]);
-  
-  // CSV export functionality
-  const handleExcelExport = useCallback(() => {
-    setIsLoading(true);
-    toast({
-      title: "Export Started",
-      description: `Processing ${filteredData.length} records for export...`,
-    });
-    
-    // Use setTimeout to avoid blocking UI during export
-    setTimeout(() => {
-      try {
-        console.log(`Starting CSV export of ${filteredData.length} records`);
-        
-        // Generate the CSV content in memory-efficient chunks
-        const csvContent = generateCsvContent(filteredData);
-        
-        // Download the file with current timestamp
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `NYPG_Voter_Statistics_${timestamp}.csv`;
-        downloadCsv(csvContent, filename);
-        
-        toast({
-          title: "Export Successful",
-          description: `${filteredData.length} records have been exported to CSV format`,
-        });
-      } catch (error) {
-        console.error("Error exporting data:", error);
-        toast({
-          title: "Export Failed",
-          description: "An error occurred during export. Please try again.",
-          variant: "destructive",
-        });
-      } finally {
-        setIsLoading(false);
-      }
-    }, 100); // Small delay to allow toast to render first
-  }, [filteredData]);
-  
-  // Helper function to update state after filtering
-  const updateFilterResults = useCallback((result: any[]) => {
-    console.log(`Updating filtered results: ${result.length} records after filtering`);
-    setFilteredData(result);
-    setTotalRecords(result.length);
-    setTotalPages(Math.ceil(result.length / pageSize));
-    setCurrentPage(1); // Reset to first page when filters change
-    setIsLoading(false);
-    
-    // Also update chart data based on filtered results
-    processChartData(result);
-  }, [pageSize, processChartData]);
-  
   // Create the debounced filter function
   const debouncedApplyFilters = useMemo(
-    () => debounce(() => {
-      if (!voterData.length) return;
-      
-      console.log("Applying filters to", voterData.length, "records");
-      setIsLoading(true);
-      
-      // Process filtering in background
-      setTimeout(() => {
-        try {
-          let result = voterData;
-          
-          // Apply each filter sequentially with early termination for performance
-          if (filters.fullName) {
-            const searchTerm = filters.fullName.toLowerCase();
-            result = result.filter(voter => 
-              voter.full_name && voter.full_name.toLowerCase().includes(searchTerm)
-            );
-            
-            // Early termination if no results
-            if (result.length === 0) {
-              updateFilterResults(result);
-              return;
-            }
-          }
-          
-          if (filters.organization) {
-            const searchTerm = filters.organization.toLowerCase();
-            result = result.filter(voter => 
-              voter.organization && voter.organization.toLowerCase().includes(searchTerm)
-            );
-            
-            if (result.length === 0) {
-              updateFilterResults(result);
-              return;
-            }
-          }
-          
-          if (filters.dateOfBirth) {
-            result = result.filter(voter => 
-              voter.date_of_birth && voter.date_of_birth.includes(filters.dateOfBirth)
-            );
-            
-            if (result.length === 0) {
-              updateFilterResults(result);
-              return;
-            }
-          }
-          
-          if (filters.gender) {
-            result = result.filter(voter => 
-              voter.gender === filters.gender
-            );
-            
-            if (result.length === 0) {
-              updateFilterResults(result);
-              return;
-            }
-          }
-          
-          if (filters.region) {
-            const searchTerm = filters.region.toLowerCase();
-            result = result.filter(voter => 
-              voter.region && voter.region.toLowerCase().includes(searchTerm)
-            );
-            
-            if (result.length === 0) {
-              updateFilterResults(result);
-              return;
-            }
-          }
-          
-          if (filters.constituency) {
-            const searchTerm = filters.constituency.toLowerCase();
-            result = result.filter(voter => 
-              voter.constituency && voter.constituency.toLowerCase().includes(searchTerm)
-            );
-            
-            if (result.length === 0) {
-              updateFilterResults(result);
-              return;
-            }
-          }
-          
-          if (filters.identificationType) {
-            result = result.filter(voter => 
-              voter.identification_type && voter.identification_type.includes(filters.identificationType)
-            );
-            
-            if (result.length === 0) {
-              updateFilterResults(result);
-              return;
-            }
-          }
-          
-          if (filters.identificationNumber) {
-            result = result.filter(voter => 
-              voter.identification_number && voter.identification_number.includes(filters.identificationNumber)
-            );
-          }
-          
-          updateFilterResults(result);
-          
-        } catch (error) {
-          console.error("Error applying filters:", error);
-          toast({
-            title: "Filter Error",
-            description: "An error occurred while filtering the data",
-            variant: "destructive",
-          });
-          setIsLoading(false);
-        }
-      }, 0);
-    }, 300),
+    () => createDebouncedFilterFn(voterData, filters, updateFilterResults),
     [voterData, filters, updateFilterResults]
   );
 
@@ -544,21 +185,41 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     };
   }, [filters, voterData, debouncedApplyFilters]);
 
+  // Delete success handler
+  const handleDeleteSuccess = useCallback(async () => {
+    console.log("Delete operation completed, performing full data refresh");
+    setIsLoading(true);
+    
+    try {
+      // Force full reload with delay to ensure database consistency
+      await new Promise(resolve => setTimeout(resolve, 500));
+      await fetchVoterData();
+      await fetchAdminData();
+      
+      toast({
+        title: "Data Refreshed",
+        description: "The latest data has been loaded from the database",
+      });
+    } catch (error) {
+      console.error("Error refreshing data after deletion:", error);
+      toast({
+        title: "Refresh Failed",
+        description: "Unable to refresh data. Please reload the page.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [fetchVoterData, fetchAdminData]);
+  
   // Initial data loading
   useEffect(() => {
     console.log("Admin authenticated, loading data");
     
     const initializeData = async () => {
       try {
-        // Force a refresh of database connection
-        try {
-          await supabase.auth.refreshSession();
-        } catch (refreshError) {
-          console.log("Session refresh not needed or failed:", refreshError);
-        }
-        
         // Load initial data in parallel
-        await Promise.all([loadVoterData(), loadAdmins()]);
+        await Promise.all([fetchVoterData(), fetchAdminData()]);
       } catch (error) {
         console.error("Error during initial data loading:", error);
       }
@@ -567,12 +228,22 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     initializeData();
     
     // Set up realtime subscriptions with enhanced error handling
-    const unsubscribe = setupRealtimeSubscriptions();
+    const unsubscribe = setupRealtimeSubscriptions(
+      fetchVoterData,
+      fetchAdminData
+    );
     
     return () => {
       unsubscribe();
     };
-  }, [loadVoterData, loadAdmins, setupRealtimeSubscriptions]);
+  }, [fetchVoterData, fetchAdminData]);
+
+  // CSV export functionality wrapped in a useCallback
+  const handleExcelExport = useCallback(() => {
+    setIsLoading(true);
+    exportToExcel(filteredData);
+    setIsLoading(false);
+  }, [filteredData]);
 
   // Create the context value object
   const contextValue = useMemo(() => ({
@@ -603,16 +274,12 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     constituencyData,
     adminList,
     filters,
-    setFilters,
     isLoading,
     selectedRegion,
-    setSelectedRegion,
     currentPage,
     totalPages,
     totalRecords,
     pageSize,
-    setPageSize,
-    setCurrentPage,
     handleDeleteSuccess,
     handleExcelExport
   ]);
