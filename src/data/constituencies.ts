@@ -1,7 +1,8 @@
+
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
-import { crypto } from "crypto";
+import { randomUUID } from "crypto";
 
 // Export region constituencies data that we'll serve statically
 export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
@@ -172,7 +173,7 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
       const { data: rpcData, error: rpcError } = await supabase.rpc('admin_login', { 
         admin_email: email, 
         admin_password: password 
-      }, { signal: controller.signal });
+      });
       
       clearTimeout(timeoutId);
       
@@ -214,7 +215,7 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
       }
       
       return false;
-    } catch (error) {
+    } catch (error: any) {
       clearTimeout(timeoutId);
       if (error.name === 'AbortError') {
         console.error("Login request timed out");
@@ -395,7 +396,7 @@ export const submitVoterRegistration = async (formData: VoterFormData) => {
     };
     
     // Store backup locally first in case of connectivity issues
-    const submissionId = crypto.randomUUID ? crypto.randomUUID() : Date.now().toString();
+    const submissionId = randomUUID ? randomUUID() : Date.now().toString();
     const backupKey = `voter_submission_${submissionId}`;
     try {
       localStorage.setItem(backupKey, JSON.stringify({
