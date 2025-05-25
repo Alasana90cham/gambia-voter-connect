@@ -1,4 +1,3 @@
-
 import React from 'react';
 import { TableCell, TableRow } from "@/components/ui/table";
 
@@ -23,14 +22,14 @@ export const NoDataRow = () => (
   </TableRow>
 );
 
-// Enhanced export formatter for large datasets - no censoring
+// Complete export formatter - shows all data without any censoring or masking
 export const formatForExport = (voter: VoterData) => {
   const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
   const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
                 voter.identification_type === 'identification_document' ? 'ID Document' :
                 voter.identification_type === 'passport_number' ? 'Passport' : '';
   
-  // No masking for exports - show complete data
+  // Return complete data without any masking, censoring, or redaction
   return `"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"`;
 };
 
@@ -102,24 +101,31 @@ export const filterLargeDataset = (data: any[], filterFn: (item: any) => boolean
   return result;
 };
 
-// Generate CSV content in memory-efficient chunks
+// Generate complete CSV content with all information visible
 export const generateCsvContent = (data: any[], includeHeaders = true): string => {
-  const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
+  const headers = "No.,Full Name,Email Address,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number (Complete)\n";
   const chunkSize = 1000;
   let csvContent = includeHeaders ? headers : '';
   const totalItems = data.length;
   
-  console.log(`Generating CSV for ${totalItems} records in chunks of ${chunkSize}`);
+  console.log(`Generating complete CSV for ${totalItems} records with all data visible`);
   
   for (let i = 0; i < totalItems; i += chunkSize) {
     const endIdx = Math.min(i + chunkSize, totalItems);
-    console.log(`Processing CSV chunk ${Math.floor(i/chunkSize) + 1}/${Math.ceil(totalItems/chunkSize)}`);
+    console.log(`Processing complete CSV chunk ${Math.floor(i/chunkSize) + 1}/${Math.ceil(totalItems/chunkSize)}`);
     
-    // Process this chunk
+    // Process this chunk with complete data
     for (let j = i; j < endIdx; j++) {
       const voter = data[j];
       const rowNum = j + 1; // 1-based row numbering
-      csvContent += `${rowNum},${formatForExport(voter)}\n`;
+      
+      // Format with complete information - no censoring
+      const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+      const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
+                    voter.identification_type === 'identification_document' ? 'ID Document' :
+                    voter.identification_type === 'passport_number' ? 'Passport' : '';
+      
+      csvContent += `${rowNum},"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"\n`;
     }
   }
   
