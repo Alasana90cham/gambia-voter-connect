@@ -16,9 +16,11 @@ interface GenderChartProps {
 const GenderChart: React.FC<GenderChartProps> = ({ genderData, totalCount }) => {
   const COLORS = ['#0088FE', '#00C49F', '#FFBB28', '#FF8042'];
   
-  // Calculate the actual sum from chart data to ensure accuracy
+  // Calculate the actual sum from chart data
   const calculatedTotal = genderData.reduce((sum, item) => sum + item.value, 0);
-  const displayTotal = totalCount > 0 ? totalCount : calculatedTotal;
+  const displayTotal = calculatedTotal > 0 ? calculatedTotal : totalCount;
+
+  console.log("GenderChart data:", { genderData, totalCount, calculatedTotal, displayTotal });
 
   return (
     <Card className="p-6">
@@ -48,11 +50,11 @@ const GenderChart: React.FC<GenderChartProps> = ({ genderData, totalCount }) => 
         </div>
       ) : (
         <div className="flex justify-center items-center h-[300px]">
-          <p>No data available</p>
+          <p>No gender data available</p>
         </div>
       )}
       <div className="mt-4 text-sm text-gray-600">
-        <p>Total Registrations: {displayTotal}</p>
+        <p>Total Registrations: {displayTotal.toLocaleString()}</p>
         <p className="mt-1">Last updated: {new Date().toLocaleString()}</p>
       </div>
     </Card>

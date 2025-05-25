@@ -13,8 +13,10 @@ interface RegionChartProps {
 }
 
 const RegionChart: React.FC<RegionChartProps> = ({ regionData }) => {
-  // Calculate total number of regions and registrations for accurate display
+  // Calculate total registrations from actual data
   const totalRegistrations = regionData.reduce((sum, region) => sum + region.value, 0);
+
+  console.log("RegionChart data:", { regionData, totalRegistrations });
 
   return (
     <Card className="p-6">
@@ -41,12 +43,12 @@ const RegionChart: React.FC<RegionChartProps> = ({ regionData }) => {
         </div>
       ) : (
         <div className="flex justify-center items-center h-[300px]">
-          <p>No data available</p>
+          <p>No regional data available</p>
         </div>
       )}
       <div className="mt-4 text-sm text-gray-600">
         <p>Total Regions: {regionData.length}</p>
-        <p>Total Registrations: {totalRegistrations}</p>
+        <p>Total Registrations: {totalRegistrations.toLocaleString()}</p>
         <p className="mt-1">Last updated: {new Date().toLocaleString()}</p>
       </div>
     </Card>
