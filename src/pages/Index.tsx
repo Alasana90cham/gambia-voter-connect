@@ -3,6 +3,7 @@ import React from 'react';
 import MultiStepForm from '@/components/form/MultiStepForm';
 import Header from '@/components/Header';
 import Footer from '@/components/Footer';
+import CountdownTimer from '@/components/CountdownTimer';
 
 const Index = () => {
   // Implement optimized console handling for mobile devices
@@ -134,7 +135,14 @@ const Index = () => {
             <p className="text-gray-600">Complete the form below to register as a voter</p>
           </div>
           
-          <MultiStepForm />
+          <CountdownTimer 
+            targetDate={new Date()} 
+            title="Registration Deadline"
+          />
+          
+          <div className="mt-8">
+            <MultiStepForm />
+          </div>
         </div>
       </main>
       
