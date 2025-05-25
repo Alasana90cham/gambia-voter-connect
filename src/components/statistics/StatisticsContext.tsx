@@ -102,201 +102,81 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
-  // OPTIMIZED: Ultimate data fetching function with multiple fallback strategies
-  const loadCompleteVoterDatabase = useCallback(async () => {
+  // Enhanced fetch function to get ALL records without any limits
+  const loadAllVoterDataFromSupabase = useCallback(async () => {
     setIsLoading(true);
-    console.log("=== STARTING OPTIMIZED COMPLETE DATABASE FETCH ===");
+    console.log("Starting comprehensive fetch of ALL voters from Supabase");
     
     try {
-      let allVoters: any[] = [];
-      let actualTotalCount = 0;
-      
-      // Strategy 1: Get exact count first using the most reliable method
-      console.log("Step 1: Getting exact database count...");
-      try {
-        const { count: exactCount, error: countError } = await supabase
-          .from('voters')
-          .select('id', { count: 'exact', head: true });
+      // First, get the exact count of all records
+      const { count: totalCount, error: countError } = await supabase
+        .from('voters')
+        .select('*', { count: 'exact', head: true });
 
-        if (countError) {
-          console.warn("Count query failed:", countError);
-        } else {
-          actualTotalCount = exactCount || 0;
-          console.log(`✅ Database contains exactly ${actualTotalCount} voter records`);
-        }
-      } catch (countErr) {
-        console.warn("Count strategy failed, will determine count during fetch");
+      if (countError) {
+        console.error("Error getting total count:", countError);
+        throw countError;
       }
 
-      // Strategy 2: Ultra-aggressive batched fetching with multiple retry mechanisms
-      const ULTRA_BATCH_SIZE = 2000; // Larger batches for efficiency
-      const MAX_RETRIES_PER_BATCH = 5;
-      let currentOffset = 0;
-      let hasMoreData = true;
-      let consecutiveEmptyBatches = 0;
-      const MAX_EMPTY_BATCHES = 3;
+      console.log(`Total records in database: ${totalCount}`);
 
-      console.log("Step 2: Starting ultra-aggressive batch fetching...");
+      // Now fetch ALL records in batches to ensure we don't miss any
+      let allVoters: any[] = [];
+      const batchSize = 1000;
+      let offset = 0;
+      let hasMore = true;
 
-      while (hasMoreData && consecutiveEmptyBatches < MAX_EMPTY_BATCHES) {
-        let batchSuccess = false;
-        let retryCount = 0;
-        let batchData: any[] = [];
+      while (hasMore) {
+        console.log(`Fetching batch starting at offset ${offset}`);
+        
+        const { data: batchData, error: batchError } = await supabase
+          .from('voters')
+          .select('*')
+          .range(offset, offset + batchSize - 1)
+          .order('created_at', { ascending: false });
 
-        // Retry mechanism for each batch
-        while (!batchSuccess && retryCount < MAX_RETRIES_PER_BATCH) {
-          try {
-            console.log(`Fetching batch: offset ${currentOffset}, size ${ULTRA_BATCH_SIZE} (attempt ${retryCount + 1}/${MAX_RETRIES_PER_BATCH})`);
-            
-            const { data, error } = await supabase
-              .from('voters')
-              .select('*')
-              .range(currentOffset, currentOffset + ULTRA_BATCH_SIZE - 1)
-              .order('created_at', { ascending: false });
-
-            if (error) {
-              throw error;
-            }
-
-            batchData = data || [];
-            batchSuccess = true;
-            console.log(`✅ Batch successful: received ${batchData.length} records`);
-            
-          } catch (batchError) {
-            retryCount++;
-            console.warn(`❌ Batch failed (attempt ${retryCount}):`, batchError);
-            
-            if (retryCount < MAX_RETRIES_PER_BATCH) {
-              // Exponential backoff with jitter
-              const delay = Math.min(1000 * Math.pow(2, retryCount) + Math.random() * 500, 10000);
-              console.log(`Retrying batch in ${delay}ms...`);
-              await new Promise(resolve => setTimeout(resolve, delay));
-            }
-          }
+        if (batchError) {
+          console.error(`Error fetching batch at offset ${offset}:`, batchError);
+          throw batchError;
         }
 
-        if (!batchSuccess) {
-          console.error(`❌ Failed to fetch batch after ${MAX_RETRIES_PER_BATCH} attempts. Offset: ${currentOffset}`);
-          
-          // Try smaller batch size as final fallback
-          if (ULTRA_BATCH_SIZE > 100) {
-            console.log("Attempting smaller batch size fallback...");
-            try {
-              const { data: fallbackData, error: fallbackError } = await supabase
-                .from('voters')
-                .select('*')
-                .range(currentOffset, currentOffset + 99)
-                .order('created_at', { ascending: false });
-
-              if (!fallbackError && fallbackData) {
-                batchData = fallbackData;
-                console.log(`✅ Fallback successful: ${batchData.length} records`);
-              }
-            } catch (fallbackErr) {
-              console.error("Even fallback failed:", fallbackErr);
-            }
-          }
-        }
-
-        // Process the batch data
         if (batchData && batchData.length > 0) {
           allVoters = [...allVoters, ...batchData];
-          consecutiveEmptyBatches = 0;
-          console.log(`📊 Total collected so far: ${allVoters.length} records`);
+          console.log(`Fetched ${batchData.length} records. Total so far: ${allVoters.length}`);
           
           // Continue if we got a full batch
-          hasMoreData = batchData.length >= ULTRA_BATCH_SIZE;
-          currentOffset += batchData.length;
+          hasMore = batchData.length === batchSize;
+          offset += batchSize;
         } else {
-          consecutiveEmptyBatches++;
-          console.log(`Empty batch detected (${consecutiveEmptyBatches}/${MAX_EMPTY_BATCHES})`);
-          
-          if (consecutiveEmptyBatches < MAX_EMPTY_BATCHES) {
-            // Try skipping ahead in case of gaps
-            currentOffset += ULTRA_BATCH_SIZE;
-          }
-        }
-
-        // Safety check to prevent infinite loops
-        if (currentOffset > 1000000) { // Reasonable upper limit
-          console.warn("Safety limit reached, stopping fetch");
-          break;
+          hasMore = false;
         }
       }
 
-      // Strategy 3: Final verification and gap detection
-      console.log("Step 3: Final verification...");
-      
-      if (actualTotalCount > 0 && allVoters.length !== actualTotalCount) {
-        const missingCount = actualTotalCount - allVoters.length;
-        console.warn(`⚠️ DATA MISMATCH: Expected ${actualTotalCount}, got ${allVoters.length}. Missing: ${missingCount} records`);
-        
-        // Attempt to find missing records using a different approach
-        if (missingCount > 0 && missingCount < 1000) {
-          console.log("Attempting to find missing records...");
-          try {
-            // Get all IDs first, then fetch missing ones
-            const { data: allIds } = await supabase
-              .from('voters')
-              .select('id')
-              .order('created_at', { ascending: false });
+      console.log(`Successfully fetched ALL ${allVoters.length} voters from Supabase`);
+      console.log(`Expected: ${totalCount}, Actual: ${allVoters.length}`);
 
-            if (allIds) {
-              const fetchedIds = new Set(allVoters.map(v => v.id));
-              const missingIds = allIds.filter(v => !fetchedIds.has(v.id)).map(v => v.id);
-              
-              if (missingIds.length > 0) {
-                console.log(`Found ${missingIds.length} missing IDs, fetching them...`);
-                
-                for (let i = 0; i < missingIds.length; i += 100) {
-                  const idBatch = missingIds.slice(i, i + 100);
-                  const { data: missingRecords } = await supabase
-                    .from('voters')
-                    .select('*')
-                    .in('id', idBatch);
-                  
-                  if (missingRecords) {
-                    allVoters = [...allVoters, ...missingRecords];
-                    console.log(`✅ Recovered ${missingRecords.length} missing records`);
-                  }
-                }
-              }
-            }
-          } catch (recoveryError) {
-            console.warn("Recovery attempt failed:", recoveryError);
-          }
-        }
+      if (allVoters.length !== totalCount) {
+        console.warn(`Mismatch: Expected ${totalCount} records but got ${allVoters.length}`);
+        toast({
+          title: "Data Count Mismatch",
+          description: `Expected ${totalCount} records but loaded ${allVoters.length}. Some data might be missing.`,
+          variant: "destructive",
+        });
       }
 
-      // Remove duplicates based on ID
-      const uniqueVoters = allVoters.reduce((acc, voter) => {
-        if (!acc.find(v => v.id === voter.id)) {
-          acc.push(voter);
-        }
-        return acc;
-      }, []);
-
-      const finalCount = uniqueVoters.length;
-      console.log(`🎯 FINAL RESULT: Successfully fetched ${finalCount} unique voter records`);
-      
-      if (actualTotalCount > 0) {
-        const accuracy = ((finalCount / actualTotalCount) * 100).toFixed(2);
-        console.log(`📈 Data accuracy: ${accuracy}% (${finalCount}/${actualTotalCount})`);
-      }
-
-      if (finalCount > 0) {
+      if (allVoters && allVoters.length > 0) {
         // Set all data states
-        setVoterData(uniqueVoters);
-        setFilteredData(uniqueVoters);
-        setTotalRecords(finalCount);
-        setTotalPages(Math.ceil(finalCount / pageSize));
+        setVoterData(allVoters);
+        setFilteredData(allVoters);
+        setTotalRecords(allVoters.length);
+        setTotalPages(Math.ceil(allVoters.length / pageSize));
         
         // Process chart data with all records
-        processChartDataFromSupabase(uniqueVoters);
+        processChartDataFromSupabase(allVoters);
         
         toast({
-          title: "✅ Complete Database Loaded",
-          description: `Successfully loaded all ${finalCount} voter records from database.`,
+          title: "Data Loaded Successfully",
+          description: `Loaded ${allVoters.length} voter records from database.`,
         });
       } else {
         // No data found
@@ -309,16 +189,15 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         setTotalPages(1);
         
         toast({
-          title: "No Registration Data",
+          title: "No Data Found",
           description: "No voter registration records were found in the database.",
         });
       }
-      
     } catch (error) {
-      console.error("❌ CRITICAL ERROR in complete database fetch:", error);
+      console.error("Error loading voter data from Supabase:", error);
       toast({
         title: "Database Error",
-        description: "Failed to load complete voter database. Please try again.",
+        description: "Failed to load voter data from database. Please try again.",
         variant: "destructive",
       });
       
@@ -329,7 +208,6 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       setTotalPages(1);
     } finally {
       setIsLoading(false);
-      console.log("=== OPTIMIZED DATABASE FETCH COMPLETE ===");
     }
   }, [pageSize]);
 
@@ -417,7 +295,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         id: admin.id,
         email: admin.email,
         isAdmin: admin.is_admin,
-        password: admin.password
+        password: admin.password // Note: In production, passwords shouldn't be exposed
       }));
       
       setAdminList(adminList);
@@ -433,51 +311,51 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
 
   // Enhanced realtime subscription
   const setupRealtimeSubscriptions = useCallback(() => {
-    console.log("Setting up realtime subscriptions for complete database monitoring");
+    console.log("Setting up realtime subscriptions for Supabase data");
     
     // Voters table subscription
     const votersChannel = supabase
-      .channel('voters-realtime-complete')
+      .channel('voters-realtime')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'voters'
       }, (payload) => {
-        console.log(`Real-time voters change: ${payload.eventType}`);
-        // Reload complete database when any change occurs
-        loadCompleteVoterDatabase();
+        console.log(`Voters table change detected: ${payload.eventType}`);
+        // Reload all data when any change occurs
+        loadAllVoterDataFromSupabase();
       })
       .subscribe((status) => {
-        console.log(`Complete voters subscription status: ${status}`);
+        console.log(`Voters subscription status: ${status}`);
       });
       
     // Admins table subscription
     const adminsChannel = supabase
-      .channel('admins-realtime-complete')
+      .channel('admins-realtime')
       .on('postgres_changes', { 
         event: '*', 
         schema: 'public', 
         table: 'admins'
       }, (payload) => {
-        console.log(`Real-time admins change: ${payload.eventType}`);
+        console.log(`Admins table change detected: ${payload.eventType}`);
         loadAdminsFromSupabase();
       })
       .subscribe((status) => {
-        console.log(`Complete admins subscription status: ${status}`);
+        console.log(`Admins subscription status: ${status}`);
       });
     
     return () => {
       supabase.removeChannel(votersChannel);
       supabase.removeChannel(adminsChannel);
     };
-  }, [loadCompleteVoterDatabase, loadAdminsFromSupabase]);
+  }, [loadAllVoterDataFromSupabase, loadAdminsFromSupabase]);
 
   // Delete success handler
   const handleDeleteSuccess = useCallback(async () => {
-    console.log("Delete operation completed, refreshing complete database");
-    await loadCompleteVoterDatabase();
+    console.log("Delete operation completed, refreshing data");
+    await loadAllVoterDataFromSupabase();
     await loadAdminsFromSupabase();
-  }, [loadCompleteVoterDatabase, loadAdminsFromSupabase]);
+  }, [loadAllVoterDataFromSupabase, loadAdminsFromSupabase]);
   
   // CSV export functionality
   const handleExcelExport = useCallback(() => {
@@ -494,7 +372,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         const csvContent = generateCsvContent(filteredData);
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `NYPG_Complete_Voter_Statistics_${timestamp}.csv`;
+        const filename = `NYPG_Voter_Statistics_${timestamp}.csv`;
         downloadCsv(csvContent, filename);
         
         toast({
@@ -516,16 +394,16 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   
   // Initial data loading
   useEffect(() => {
-    console.log("Initializing OPTIMIZED complete database load from Supabase");
+    console.log("Initializing comprehensive data load from Supabase");
     
-    const initializeCompleteData = async () => {
+    const initializeData = async () => {
       await Promise.all([
-        loadCompleteVoterDatabase(),
+        loadAllVoterDataFromSupabase(),
         loadAdminsFromSupabase()
       ]);
     };
     
-    initializeCompleteData();
+    initializeData();
     
     // Set up realtime subscriptions
     const unsubscribe = setupRealtimeSubscriptions();
@@ -533,7 +411,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     return () => {
       unsubscribe();
     };
-  }, [loadCompleteVoterDatabase, loadAdminsFromSupabase, setupRealtimeSubscriptions]);
+  }, [loadAllVoterDataFromSupabase, loadAdminsFromSupabase, setupRealtimeSubscriptions]);
 
   // Enhanced filter application
   const applyFilters = useCallback(() => {
@@ -542,7 +420,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       return;
     }
     
-    console.log(`Applying filters to ${voterData.length} complete records`);
+    console.log(`Applying filters to ${voterData.length} records`);
     
     let result = [...voterData];
     
@@ -605,7 +483,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       );
     }
     
-    console.log(`Filter applied: ${result.length} records after filtering from ${voterData.length} total`);
+    console.log(`Filter applied: ${result.length} records after filtering`);
     
     setFilteredData(result);
     setTotalRecords(result.length);
