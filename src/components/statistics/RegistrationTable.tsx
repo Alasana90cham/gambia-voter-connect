@@ -35,6 +35,7 @@ interface VoterData {
   constituency: string;
   identification_type: string;
   identification_number: string;
+  created_at: string;
 }
 
 interface FilterState {
@@ -96,9 +97,15 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   const effectiveSetPageSize = useLocalPagination ? setRecordsPerPage : propSetPageSize || setRecordsPerPage;
   const isLoading = propIsLoading || false;
   
-  // Update local data when filteredData changes
+  // Update local data when filteredData changes and sort by creation date (first come first serve)
   useEffect(() => {
-    setLocalData(filteredData);
+    const sortedData = [...filteredData].sort((a, b) => {
+      // Sort by created_at in ascending order (oldest first = first come first serve)
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateA - dateB;
+    });
+    setLocalData(sortedData);
   }, [filteredData]);
   
   // Filter handling functions
@@ -162,18 +169,26 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   // Updated export function to show all data without any censoring
   const handleExcelExport = () => {
     // Create a CSV string with the filtered data showing complete information
-    const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number\n";
+    const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number,Registration Date\n";
     let csvContent = headers;
     
     // Add the filtered data rows with complete information (no redaction or censoring)
-    filteredData.forEach((voter, index) => {
+    // Sort by registration date for first-come-first-serve order
+    const sortedForExport = [...filteredData].sort((a, b) => {
+      const dateA = new Date(a.created_at || 0).getTime();
+      const dateB = new Date(b.created_at || 0).getTime();
+      return dateA - dateB;
+    });
+    
+    sortedForExport.forEach((voter, index) => {
       const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+      const registrationDate = voter.created_at ? new Date(voter.created_at).toLocaleDateString() : '';
       const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
                     voter.identification_type === 'identification_document' ? 'ID Document' :
                     voter.identification_type === 'passport_number' ? 'Passport' : '';
       
       // Show complete data without any masking or censoring
-      csvContent += `${index + 1},"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"\n`;
+      csvContent += `${index + 1},"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}","${registrationDate}"\n`;
     });
     
     // Create a blob and trigger download
@@ -181,7 +196,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `NYPG_Voter_Statistics_Complete_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `NYPG_Voter_Statistics_FirstComeFirstServe_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -189,79 +204,89 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     
     toast({
       title: "Export Successful",
-      description: `${filteredData.length} complete records exported to CSV format`,
+      description: `${filteredData.length} complete records exported in first-come-first-serve order`,
     });
   };
 
-  // Enhanced print function to show all data without any censoring
+  // Enhanced print function to show all data without any censoring in first-come-first-serve order
   const handlePrint = () => {
     if (tableRef.current) {
       const printWindow = window.open('', '_blank');
       if (printWindow) {
-        printWindow.document.write('<html><head><title>NYPG Complete Voter Registration Data</title>');
+        // Sort data for printing in first-come-first-serve order
+        const sortedForPrint = [...filteredData].sort((a, b) => {
+          const dateA = new Date(a.created_at || 0).getTime();
+          const dateB = new Date(b.created_at || 0).getTime();
+          return dateA - dateB;
+        });
+        
+        printWindow.document.write('<html><head><title>NYPG Complete Voter Registration Data - First Come First Serve</title>');
         printWindow.document.write('<style>');
         printWindow.document.write('@media print {');
         printWindow.document.write('  @page { size: landscape; margin: 0.5cm; }');
-        printWindow.document.write('  table { border-collapse: collapse; width: 100%; font-size: 10px; }');
-        printWindow.document.write('  th, td { border: 1px solid #ddd; padding: 4px; text-align: left; font-size: 10px; }');
+        printWindow.document.write('  table { border-collapse: collapse; width: 100%; font-size: 9px; }');
+        printWindow.document.write('  th, td { border: 1px solid #ddd; padding: 3px; text-align: left; font-size: 9px; }');
         printWindow.document.write('  th { background-color: #f2f2f2; font-weight: bold; }');
         printWindow.document.write('  h1 { font-size: 16px; margin-bottom: 10px; }');
         printWindow.document.write('  h3 { font-size: 14px; margin-bottom: 10px; }');
         printWindow.document.write('  .print-info { font-size: 12px; margin-bottom: 15px; }');
         printWindow.document.write('}');
-        printWindow.document.write('table { border-collapse: collapse; width: 100%; font-size: 11px; }');
-        printWindow.document.write('th, td { border: 1px solid #ddd; padding: 6px; text-align: left; }');
+        printWindow.document.write('table { border-collapse: collapse; width: 100%; font-size: 10px; }');
+        printWindow.document.write('th, td { border: 1px solid #ddd; padding: 4px; text-align: left; }');
         printWindow.document.write('th { background-color: #f2f2f2; font-weight: bold; }');
         printWindow.document.write('</style>');
         printWindow.document.write('</head><body>');
-        printWindow.document.write('<h1>National Youth Parliament Gambia - Complete Voter Registration Data</h1>');
+        printWindow.document.write('<h1>National Youth Parliament Gambia - Complete Registration Data (First Come First Serve)</h1>');
         printWindow.document.write('<div class="print-info">');
-        printWindow.document.write('<h3>Complete Export - All Information Included</h3>');
+        printWindow.document.write('<h3>Complete Export - All Information in Registration Order</h3>');
         printWindow.document.write('<p>Exported on: ' + new Date().toLocaleDateString() + ' at ' + new Date().toLocaleTimeString() + '</p>');
         printWindow.document.write('<p>Total Records: ' + filteredData.length + '</p>');
-        printWindow.document.write('<p>Note: This export contains complete and unredacted information</p>');
+        printWindow.document.write('<p>Note: Records are sorted by registration date (first registered appears first)</p>');
         printWindow.document.write('</div>');
         printWindow.document.write('<table>');
         
         // Table headers with all columns including complete information
         printWindow.document.write('<tr>');
-        printWindow.document.write('<th style="width: 4%;">No.</th>');
-        printWindow.document.write('<th style="width: 15%;">Full Name</th>');
-        printWindow.document.write('<th style="width: 18%;">Email Address</th>'); // Complete email
-        printWindow.document.write('<th style="width: 15%;">Organization</th>');
-        printWindow.document.write('<th style="width: 10%;">Date of Birth</th>');
-        printWindow.document.write('<th style="width: 8%;">Gender</th>');
-        printWindow.document.write('<th style="width: 10%;">Region</th>');
+        printWindow.document.write('<th style="width: 3%;">No.</th>');
+        printWindow.document.write('<th style="width: 13%;">Full Name</th>');
+        printWindow.document.write('<th style="width: 15%;">Email Address</th>');
+        printWindow.document.write('<th style="width: 12%;">Organization</th>');
+        printWindow.document.write('<th style="width: 8%;">Date of Birth</th>');
+        printWindow.document.write('<th style="width: 6%;">Gender</th>');
+        printWindow.document.write('<th style="width: 8%;">Region</th>');
         printWindow.document.write('<th style="width: 10%;">Constituency</th>');
-        printWindow.document.write('<th style="width: 10%;">ID Type</th>');
-        printWindow.document.write('<th style="width: 15%;">ID Number</th>'); // Complete ID number
+        printWindow.document.write('<th style="width: 8%;">ID Type</th>');
+        printWindow.document.write('<th style="width: 12%;">ID Number</th>');
+        printWindow.document.write('<th style="width: 10%;">Registration Date</th>');
         printWindow.document.write('</tr>');
         
-        // Table data with complete information (no masking or censoring)
-        filteredData.forEach((voter, index) => {
+        // Table data with complete information in first-come-first-serve order
+        sortedForPrint.forEach((voter, index) => {
           const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+          const registrationDate = voter.created_at ? new Date(voter.created_at).toLocaleDateString() : '';
           const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
                         voter.identification_type === 'identification_document' ? 'ID Document' :
                         voter.identification_type === 'passport_number' ? 'Passport' : '';
           
           printWindow.document.write('<tr>');
-          printWindow.document.write(`<td>${index + 1}</td>`); // Row number
+          printWindow.document.write(`<td>${index + 1}</td>`);
           printWindow.document.write(`<td>${voter.full_name || ''}</td>`);
-          printWindow.document.write(`<td>${voter.email || ''}</td>`); // Complete email address
+          printWindow.document.write(`<td>${voter.email || ''}</td>`);
           printWindow.document.write(`<td>${voter.organization || ''}</td>`);
           printWindow.document.write(`<td>${dob}</td>`);
           printWindow.document.write(`<td>${voter.gender || ''}</td>`);
           printWindow.document.write(`<td>${voter.region || ''}</td>`);
           printWindow.document.write(`<td>${voter.constituency || ''}</td>`);
           printWindow.document.write(`<td>${idType}</td>`);
-          printWindow.document.write(`<td>${voter.identification_number || ''}</td>`); // Complete ID number
+          printWindow.document.write(`<td>${voter.identification_number || ''}</td>`);
+          printWindow.document.write(`<td>${registrationDate}</td>`);
           printWindow.document.write('</tr>');
         });
         
         printWindow.document.write('</table>');
         printWindow.document.write('<div style="margin-top: 20px; font-size: 12px;">');
-        printWindow.document.write('<p><strong>Total records printed: ' + filteredData.length + '</strong></p>');
-        printWindow.document.write('<p>This document contains complete voter registration information without any redaction.</p>');
+        printWindow.document.write('<p><strong>Total records printed: ' + filteredData.length + ' (in registration order)</strong></p>');
+        printWindow.document.write('<p>This document contains complete voter registration information sorted by registration date.</p>');
         printWindow.document.write('</div>');
         printWindow.document.write('<div style="text-align: center; margin-top: 30px; page-break-inside: avoid;">');
         printWindow.document.write('<button onclick="window.print()" style="margin-right: 10px; padding: 10px 20px;">Print This Page</button>');
@@ -363,9 +388,10 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     );
   };
 
-  // Updated VoterRow component to show complete information
+  // Updated VoterRow component to show complete information with registration order number
   const VoterRow = ({ voter, index }) => {
     const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+    const registrationDate = voter.created_at ? new Date(voter.created_at).toLocaleDateString() : '';
     const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
                   voter.identification_type === 'identification_document' ? 'ID Document' :
                   voter.identification_type === 'passport_number' ? 'Passport' : '';
@@ -380,7 +406,8 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         <TableCell>{voter.region}</TableCell>
         <TableCell>{voter.constituency}</TableCell>
         <TableCell>{idType}</TableCell>
-        <TableCell>{voter.identification_number}</TableCell> {/* Show complete ID number */}
+        <TableCell>{voter.identification_number}</TableCell>
+        <TableCell className="text-xs">{registrationDate}</TableCell>
       </TableRow>
     );
   };
@@ -392,7 +419,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     <Card className="p-6 mb-8 relative">
       {renderLoadingState()}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6">
-        <h2 className="text-xl font-semibold">Registration Data - Complete View</h2>
+        <h2 className="text-xl font-semibold">Registration Data - First Come First Serve Order</h2>
         <div className="flex flex-wrap items-center gap-2">
           <Button variant="outline" onClick={clearFilters} className="flex items-center gap-2">
             <Filter size={16} />
@@ -521,6 +548,11 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                     value={filters.identificationNumber}
                     onChange={(e) => handleFilterChange('identificationNumber', e.target.value)}
                   />
+                </div>
+              </TableHead>
+              <TableHead>
+                <div className="space-y-1">
+                  <div>Reg. Date</div>
                 </div>
               </TableHead>
             </TableRow>
