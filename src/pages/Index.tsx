@@ -1,4 +1,3 @@
-
 import React from 'react';
 import MultiStepForm from '@/components/form/MultiStepForm';
 import Header from '@/components/Header';
@@ -135,10 +134,7 @@ const Index = () => {
             <p className="text-gray-600">Complete the form below to register as a voter</p>
           </div>
           
-          <CountdownTimer 
-            targetDate={new Date()} 
-            title="Registration Deadline"
-          />
+          <CountdownTimer title="Registration Deadline" />
           
           <div className="mt-8">
             <MultiStepForm />

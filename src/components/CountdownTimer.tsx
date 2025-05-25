@@ -3,11 +3,10 @@ import React, { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 
 interface CountdownTimerProps {
-  targetDate: Date;
   title?: string;
 }
 
-const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetDate, title = "Registration Closes" }) => {
+const CountdownTimer: React.FC<CountdownTimerProps> = ({ title = "Registration Closes" }) => {
   const [timeLeft, setTimeLeft] = useState({
     days: 0,
     hours: 0,
@@ -16,34 +15,10 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetDate, title = "Re
   });
   const [isExpired, setIsExpired] = useState(false);
 
-  useEffect(() => {
-    const timer = setInterval(() => {
-      const now = new Date().getTime();
-      const target = targetDate.getTime();
-      const difference = target - now;
-
-      if (difference > 0) {
-        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
-        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
-        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
-
-        setTimeLeft({ days, hours, minutes, seconds });
-        setIsExpired(false);
-      } else {
-        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
-        setIsExpired(true);
-      }
-    }, 1000);
-
-    return () => clearInterval(timer);
-  }, [targetDate]);
-
   // Function to get next Wednesday at 11:59 PM
   const getNextWednesday = () => {
     const today = new Date();
     const dayOfWeek = today.getDay(); // 0 = Sunday, 1 = Monday, ..., 3 = Wednesday
-    const daysUntilWednesday = (3 - dayOfWeek + 7) % 7;
     
     // If today is Wednesday, check if it's before 11:59 PM
     if (dayOfWeek === 3) {
@@ -61,7 +36,8 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetDate, title = "Re
       }
     }
     
-    // Get next Wednesday at 11:59 PM
+    // Calculate days until next Wednesday
+    const daysUntilWednesday = (3 - dayOfWeek + 7) % 7;
     const nextWednesday = new Date(today);
     nextWednesday.setDate(today.getDate() + (daysUntilWednesday || 7));
     nextWednesday.setHours(23, 59, 0, 0);
@@ -70,6 +46,29 @@ const CountdownTimer: React.FC<CountdownTimerProps> = ({ targetDate, title = "Re
 
   // Calculate target date on component mount
   const [targetWednesday] = useState(() => getNextWednesday());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      const now = new Date().getTime();
+      const target = targetWednesday.getTime();
+      const difference = target - now;
+
+      if (difference > 0) {
+        const days = Math.floor(difference / (1000 * 60 * 60 * 24));
+        const hours = Math.floor((difference % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+        const minutes = Math.floor((difference % (1000 * 60 * 60)) / (1000 * 60));
+        const seconds = Math.floor((difference % (1000 * 60)) / 1000);
+
+        setTimeLeft({ days, hours, minutes, seconds });
+        setIsExpired(false);
+      } else {
+        setTimeLeft({ days: 0, hours: 0, minutes: 0, seconds: 0 });
+        setIsExpired(true);
+      }
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, [targetWednesday]);
 
   const formatTime = (value: number) => {
     return value.toString().padStart(2, '0');
