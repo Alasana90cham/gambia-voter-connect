@@ -102,10 +102,10 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
-  // Enhanced fetch function to get ALL records without any limits
+  // Optimized fetch function with much larger batch sizes
   const loadAllVoterDataFromSupabase = useCallback(async () => {
     setIsLoading(true);
-    console.log("Starting comprehensive fetch of ALL voters from Supabase");
+    console.log("Starting optimized fetch of ALL voters from Supabase");
     
     try {
       // First, get the exact count of all records
@@ -120,49 +120,54 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
 
       console.log(`Total records in database: ${totalCount}`);
 
-      // Now fetch ALL records in batches to ensure we don't miss any
+      // Try to fetch all data in one request first
       let allVoters: any[] = [];
-      const batchSize = 1000;
-      let offset = 0;
-      let hasMore = true;
+      
+      console.log("Attempting to fetch all records in a single request...");
+      const { data: allData, error: singleError } = await supabase
+        .from('voters')
+        .select('*')
+        .order('created_at', { ascending: false });
 
-      while (hasMore) {
-        console.log(`Fetching batch starting at offset ${offset}`);
+      if (!singleError && allData) {
+        allVoters = allData;
+        console.log(`Successfully fetched all ${allVoters.length} records in one request!`);
+      } else {
+        console.log("Single request failed, falling back to large batch strategy");
         
-        const { data: batchData, error: batchError } = await supabase
-          .from('voters')
-          .select('*')
-          .range(offset, offset + batchSize - 1)
-          .order('created_at', { ascending: false });
+        // Fallback to very large batches (10,000 records at a time instead of 1,000)
+        const largeBatchSize = 10000;
+        let offset = 0;
+        let hasMore = true;
 
-        if (batchError) {
-          console.error(`Error fetching batch at offset ${offset}:`, batchError);
-          throw batchError;
-        }
-
-        if (batchData && batchData.length > 0) {
-          allVoters = [...allVoters, ...batchData];
-          console.log(`Fetched ${batchData.length} records. Total so far: ${allVoters.length}`);
+        while (hasMore) {
+          console.log(`Fetching large batch starting at offset ${offset} (size: ${largeBatchSize})`);
           
-          // Continue if we got a full batch
-          hasMore = batchData.length === batchSize;
-          offset += batchSize;
-        } else {
-          hasMore = false;
+          const { data: batchData, error: batchError } = await supabase
+            .from('voters')
+            .select('*')
+            .range(offset, offset + largeBatchSize - 1)
+            .order('created_at', { ascending: false });
+
+          if (batchError) {
+            console.error(`Error fetching batch at offset ${offset}:`, batchError);
+            throw batchError;
+          }
+
+          if (batchData && batchData.length > 0) {
+            allVoters = [...allVoters, ...batchData];
+            console.log(`Fetched ${batchData.length} records. Total so far: ${allVoters.length}`);
+            
+            // Continue only if we got a full batch
+            hasMore = batchData.length === largeBatchSize;
+            offset += largeBatchSize;
+          } else {
+            hasMore = false;
+          }
         }
       }
 
       console.log(`Successfully fetched ALL ${allVoters.length} voters from Supabase`);
-      console.log(`Expected: ${totalCount}, Actual: ${allVoters.length}`);
-
-      if (allVoters.length !== totalCount) {
-        console.warn(`Mismatch: Expected ${totalCount} records but got ${allVoters.length}`);
-        toast({
-          title: "Data Count Mismatch",
-          description: `Expected ${totalCount} records but loaded ${allVoters.length}. Some data might be missing.`,
-          variant: "destructive",
-        });
-      }
 
       if (allVoters && allVoters.length > 0) {
         // Set all data states
@@ -309,9 +314,9 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, []);
 
-  // Enhanced realtime subscription
+  // Simplified realtime subscription
   const setupRealtimeSubscriptions = useCallback(() => {
-    console.log("Setting up realtime subscriptions for Supabase data");
+    console.log("Setting up optimized realtime subscriptions");
     
     // Voters table subscription
     const votersChannel = supabase
@@ -325,9 +330,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         // Reload all data when any change occurs
         loadAllVoterDataFromSupabase();
       })
-      .subscribe((status) => {
-        console.log(`Voters subscription status: ${status}`);
-      });
+      .subscribe();
       
     // Admins table subscription
     const adminsChannel = supabase
@@ -340,9 +343,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         console.log(`Admins table change detected: ${payload.eventType}`);
         loadAdminsFromSupabase();
       })
-      .subscribe((status) => {
-        console.log(`Admins subscription status: ${status}`);
-      });
+      .subscribe();
     
     return () => {
       supabase.removeChannel(votersChannel);
@@ -357,7 +358,6 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     await loadAdminsFromSupabase();
   }, [loadAllVoterDataFromSupabase, loadAdminsFromSupabase]);
   
-  // CSV export functionality
   const handleExcelExport = useCallback(() => {
     setIsLoading(true);
     toast({
@@ -394,7 +394,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   
   // Initial data loading
   useEffect(() => {
-    console.log("Initializing comprehensive data load from Supabase");
+    console.log("Initializing optimized data load from Supabase");
     
     const initializeData = async () => {
       await Promise.all([

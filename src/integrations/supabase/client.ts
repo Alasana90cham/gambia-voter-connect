@@ -41,8 +41,8 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
       'X-Client-Info': 'supabase-js/2.x'
     },
     fetch: (url, options) => {
-      // Increased timeout to 20 minutes for very large dataset operations
-      const timeout = 1200000; 
+      // Optimized timeout for large dataset operations - reduced from 20 minutes to 5 minutes
+      const timeout = 300000; 
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), timeout);
       
@@ -57,16 +57,16 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
   },
   realtime: {
     params: {
-      eventsPerSecond: 100, // Increased rate limit for more frequent updates
+      eventsPerSecond: 50, // Reduced for better performance
     }
   }
 });
 
 // Enhanced connection pooling and request monitoring
 let failedRequests = 0;
-const maxRetries = 10; // Increased for better resilience with large datasets
+const maxRetries = 3; // Reduced retries for faster failures
 const connectionPool = new Set();
-const maxPoolSize = 300; // Increased for better concurrency with large datasets
+const maxPoolSize = 100; // Reduced pool size for better performance
 
 // Simplified handleRequestWithRetry function to avoid excessive type instantiation
 const handleRequestWithRetry = async (requestFn) => {
@@ -95,8 +95,8 @@ const handleRequestWithRetry = async (requestFn) => {
         throw error;
       }
       
-      const baseDelay = 200 * Math.pow(2, retries);
-      const jitter = Math.random() * 300;
+      const baseDelay = 100 * Math.pow(2, retries);
+      const jitter = Math.random() * 200;
       await new Promise(resolve => setTimeout(resolve, baseDelay + jitter));
     }
   }
@@ -135,8 +135,8 @@ supabase.auth.signInWithPassword = async (credentials) => {
   });
 };
 
-// Add optimized batch operations for handling large datasets
-export const batchOperation = async (items, operationFn, batchSize = 750) => {
+// Optimized batch operations for handling large datasets
+export const batchOperation = async (items, operationFn, batchSize = 5000) => {
   const batches = [];
   
   for (let i = 0; i < items.length; i += batchSize) {
@@ -157,8 +157,7 @@ export const batchOperation = async (items, operationFn, batchSize = 750) => {
   return results;
 };
 
-// Complete reimplementation of fetchPaginated with NO record limits
-// and multiple fail-safe mechanisms to ensure ALL records are retrieved
+// Highly optimized fetchPaginated function
 export const fetchPaginated = async <T>(
   tableName: 'admins' | 'voters',
   options: {
@@ -166,131 +165,41 @@ export const fetchPaginated = async <T>(
     orderBy?: string;
     ascending?: boolean;
   } = {}, 
-  pageSize = 500000  // Use a MASSIVE page size to get all records at once
+  pageSize = 50000  // Significantly increased page size for fewer requests
 ): Promise<T[]> => {
   const { filters = {}, orderBy = 'created_at', ascending = true } = options;
-  const allResults: T[] = [];
   
-  console.log(`Starting UNLIMITED paginated fetch for ${tableName} with NO record limits`);
+  console.log(`Starting optimized fetch for ${tableName} with large page size: ${pageSize}`);
 
   try {
-    // Try direct count first to verify total records
-    const { count, error: countError } = await supabase
-      .from(tableName)
-      .select('*', { count: 'exact', head: true });
+    // Create a single optimized query
+    let query = supabase.from(tableName).select('*');
     
-    if (countError) {
-      console.error(`Error getting count for ${tableName}:`, countError);
-    } else {
-      console.log(`Total records in ${tableName}: ${count}`);
-    }
+    // Add ordering
+    query = query.order(orderBy, { ascending });
     
-    // Primary fetching strategy - get everything at once
-    try {
-      // Create a fresh query
-      let query = supabase.from(tableName).select('*');
-      
-      // Add ordering
-      query = query.order(orderBy, { ascending });
-      
-      // Apply filters
-      Object.entries(filters).forEach(([key, value]) => {
-        if (value !== undefined && value !== null && value !== '') {
-          // @ts-ignore
-          query = query.eq(key, value);
-        }
-      });
-
-      console.log(`Fetching ALL ${tableName} records at once`);
-      
-      const { data, error } = await query;
-      
-      if (error) {
-        console.error(`Error fetching all ${tableName} records:`, error);
-      } else if (data) {
-        console.log(`Successfully retrieved all ${data.length} records at once`);
-        allResults.push(...data as T[]);
+    // Apply filters
+    Object.entries(filters).forEach(([key, value]) => {
+      if (value !== undefined && value !== null && value !== '') {
+        // @ts-ignore
+        query = query.eq(key, value);
       }
-      
-      return allResults;
-      
-    } catch (allAtOnceError) {
-      console.error(`Error fetching all records at once:`, allAtOnceError);
-    }
-    
-    // Fallback to chunked pagination if getting all at once fails
-    if (allResults.length === 0) {
-      console.log("Falling back to chunked pagination strategy");
-      
-      // Strategy 2: Standard pagination using range
-      let page = 0;
-      let hasMore = true;
-      const maxPages = 10000; // Virtually unlimited
-      const fallbackPageSize = 1000; // Smaller page size for reliability
-      
-      while (hasMore && page < maxPages) {
-        const start = page * fallbackPageSize;
-        
-        // Create a fresh query for each page
-        let query = supabase.from(tableName).select('*', { count: 'exact' });
-        
-        // Add ordering
-        query = query.order(orderBy, { ascending });
-        
-        // Add range for current page
-        query = query.range(start, start + fallbackPageSize - 1);
-        
-        // Apply filters
-        Object.entries(filters).forEach(([key, value]) => {
-          if (value !== undefined && value !== null && value !== '') {
-            // @ts-ignore
-            query = query.eq(key, value);
-          }
-        });
+    });
 
-        console.log(`Fetching ${tableName} page ${page + 1} (${start}-${start + fallbackPageSize - 1})`);
-        
-        // Multiple retry mechanism for each page
-        let pageRetries = 0;
-        let pageData = null;
-        
-        while (pageRetries < 3 && !pageData) {
-          try {
-            const { data, error } = await query;
-            
-            if (error) {
-              console.error(`Error fetching page ${page + 1} (attempt ${pageRetries + 1}/3):`, error);
-              pageRetries++;
-              await new Promise(resolve => setTimeout(resolve, 1000 * pageRetries));
-            } else {
-              pageData = data;
-              break;
-            }
-          } catch (e) {
-            console.error(`Exception fetching page ${page + 1} (attempt ${pageRetries + 1}/3):`, e);
-            pageRetries++;
-            await new Promise(resolve => setTimeout(resolve, 1000 * pageRetries));
-          }
-        }
-        
-        if (pageData && pageData.length > 0) {
-          console.log(`Received ${pageData.length} records for page ${page + 1}`);
-          allResults.push(...pageData as T[]);
-        } else {
-          console.log(`No data received for page ${page + 1}, stopping pagination`);
-          hasMore = false;
-        }
-        
-        // Continue only if we received a full page of results
-        hasMore = pageData && pageData.length === fallbackPageSize;
-        page++;
-      }
+    console.log(`Fetching ${tableName} records with optimized query`);
+    
+    const { data, error } = await query;
+    
+    if (error) {
+      console.error(`Error fetching ${tableName} records:`, error);
+      throw error;
     }
     
-    console.log(`FINAL RESULT: Fetched ${allResults.length} total records from ${tableName}`);
-    return allResults;
+    console.log(`Successfully retrieved ${data?.length || 0} records`);
+    return (data as T[]) || [];
+    
   } catch (error) {
-    console.error('Critical error in fetchPaginated:', error);
+    console.error('Error in optimized fetchPaginated:', error);
     throw error;
   }
 };
