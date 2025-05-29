@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Card } from '@/components/ui/card';
+import { X } from 'lucide-react';
 
 interface CountdownTimerProps {
   title?: string;
@@ -8,14 +9,18 @@ interface CountdownTimerProps {
 
 const CountdownTimer: React.FC<CountdownTimerProps> = ({ title = "Registration Closes" }) => {
   return (
-    <Card className="w-full max-w-2xl mx-auto mt-6 bg-red-50 border-red-200">
-      <div className="p-6 text-center">
-        <h3 className="text-xl font-bold text-red-600 mb-2">{title}</h3>
-        <p className="text-red-700 font-semibold mb-4">Registration has been closed since 28th May 2025 at 11:58 PM</p>
+    <Card className="w-full max-w-4xl mx-auto mt-8 bg-red-50 border-red-200 border-2">
+      <div className="p-8 text-center">
+        <div className="flex items-center justify-center gap-3 mb-4">
+          <X className="text-red-600" size={32} />
+          <h3 className="text-3xl font-bold text-red-600">{title}</h3>
+          <X className="text-red-600" size={32} />
+        </div>
+        <p className="text-red-700 font-bold text-xl mb-6">Registration has been closed since 28th May 2025</p>
         
-        <div className="bg-white rounded-lg p-4 shadow-sm border border-red-100 mt-4">
-          <h4 className="text-lg font-semibold text-gray-800 mb-3">For any information, visit:</h4>
-          <div className="space-y-2 text-gray-700">
+        <div className="bg-white rounded-lg p-6 shadow-sm border border-red-100 mt-6">
+          <h4 className="text-2xl font-semibold text-gray-800 mb-4">For any information, visit:</h4>
+          <div className="space-y-3 text-gray-700 text-lg">
             <p className="font-medium">📍 NYP Office at Westfield (behind Family Planning)</p>
             <p className="font-medium">📧 Email: nypgambia.org</p>
             <p className="font-medium">📞 Call: 3204119</p>
