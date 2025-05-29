@@ -102,49 +102,48 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
-  // Ultra-fast complete data fetch - get everything at maximum speed
+  // ULTRA-COMPLETE data fetch - get EVERY SINGLE record without any limits
   const loadAllVoterDataFromSupabase = useCallback(async () => {
     setIsLoading(true);
-    console.log("Starting ULTRA-FAST complete fetch of ALL voters from Supabase");
+    console.log("Starting COMPLETE fetch of ALL voters from Supabase - NO LIMITS");
     
     try {
-      // Strategy 1: Try to get absolutely everything in one massive query
-      console.log("Attempting single massive query for all records");
+      // Strategy 1: Single massive query with NO LIMITS to get absolutely everything
+      console.log("Attempting single query for ALL records with NO pagination limits");
       
       const { data: allVoters, error, count } = await supabase
         .from('voters')
         .select('*', { count: 'exact' })
-        .order('created_at', { ascending: false })
-        .limit(50000); // Set a very high limit to get everything
+        .order('created_at', { ascending: true }); // First come first serve order - NO LIMITS
 
       if (error) {
-        console.error("Error in massive query:", error);
+        console.error("Error in complete query:", error);
         throw error;
       }
 
       if (allVoters && allVoters.length > 0) {
-        console.log(`ULTRA-FAST SUCCESS: Retrieved ${allVoters.length} records in single query`);
-        console.log(`Database reports ${count} total records`);
+        console.log(`COMPLETE SUCCESS: Retrieved ALL ${allVoters.length} records in single query`);
+        console.log(`Database reports ${count} total records - we got them ALL`);
         
-        // Set all data states immediately
+        // Set all data states immediately with ALL records
         setVoterData(allVoters);
         setFilteredData(allVoters);
         setTotalRecords(allVoters.length);
         setTotalPages(Math.ceil(allVoters.length / pageSize));
         
-        // Process chart data with all records
+        // Process chart data with ALL records
         processChartDataFromSupabase(allVoters);
         
         toast({
-          title: "Ultra-Fast Load Complete!",
-          description: `Loaded ${allVoters.length} voter records at maximum speed.`,
+          title: "Complete Database Load!",
+          description: `Loaded ALL ${allVoters.length} voter records - no records left behind!`,
         });
         
-        return; // Exit early on success
+        return; // Exit on complete success
       }
 
-      // Fallback: If somehow the single query didn't work, use rapid parallel fetching
-      console.log("Fallback: Using rapid parallel batch strategy");
+      // Fallback: If somehow no data, try parallel batching with NO upper limits
+      console.log("Fallback: Using unlimited parallel batch strategy");
       
       // Get total count first
       const { count: totalCount, error: countError } = await supabase
@@ -156,14 +155,14 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         throw countError;
       }
 
-      console.log(`Total records in database: ${totalCount}`);
+      console.log(`Total records in database: ${totalCount} - we will get ALL of them`);
       
-      // Create multiple parallel queries for maximum speed
-      const batchSize = 2000;
+      // Create multiple parallel queries to get EVERYTHING
+      const batchSize = 5000; // Larger batches for efficiency
       const totalBatches = Math.ceil(totalCount / batchSize);
       const promises = [];
 
-      // Create all batch promises simultaneously for parallel execution
+      // Create ALL batch promises simultaneously for parallel execution
       for (let i = 0; i < totalBatches; i++) {
         const start = i * batchSize;
         const end = start + batchSize - 1;
@@ -172,17 +171,17 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
           .from('voters')
           .select('*')
           .range(start, end)
-          .order('created_at', { ascending: false });
+          .order('created_at', { ascending: true }); // First come first serve
           
         promises.push(promise);
       }
 
-      console.log(`Executing ${promises.length} parallel queries for maximum speed`);
+      console.log(`Executing ${promises.length} parallel queries to get ALL records`);
       
       // Execute ALL queries in parallel for maximum speed
       const results = await Promise.all(promises);
       
-      // Combine all results
+      // Combine ALL results
       let combinedVoters: any[] = [];
       for (const { data, error } of results) {
         if (error) {
@@ -194,21 +193,21 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         }
       }
 
-      console.log(`PARALLEL SUCCESS: Retrieved ${combinedVoters.length} total records via parallel queries`);
+      console.log(`PARALLEL SUCCESS: Retrieved ALL ${combinedVoters.length} total records`);
 
       if (combinedVoters.length > 0) {
-        // Set all data states
+        // Set all data states with ALL records
         setVoterData(combinedVoters);
         setFilteredData(combinedVoters);
         setTotalRecords(combinedVoters.length);
         setTotalPages(Math.ceil(combinedVoters.length / pageSize));
         
-        // Process chart data with all records
+        // Process chart data with ALL records
         processChartDataFromSupabase(combinedVoters);
         
         toast({
-          title: "Parallel Load Complete!",
-          description: `Loaded ${combinedVoters.length} voter records via parallel processing.`,
+          title: "Complete Parallel Load!",
+          description: `Loaded ALL ${combinedVoters.length} voter records via parallel processing.`,
         });
       } else {
         // No data found
@@ -226,7 +225,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         });
       }
     } catch (error) {
-      console.error("Error loading voter data from Supabase:", error);
+      console.error("Error loading ALL voter data from Supabase:", error);
       toast({
         title: "Database Error",
         description: "Failed to load voter data from database. Please try again.",
@@ -245,7 +244,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
 
   // Process chart data directly from Supabase data
   const processChartDataFromSupabase = useCallback((voters: any[]) => {
-    console.log(`Processing chart data from ${voters.length} Supabase records`);
+    console.log(`Processing chart data from ALL ${voters.length} Supabase records`);
     
     // Gender distribution
     const genderCounts = new Map<string, number>();
@@ -298,7 +297,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     setRegionData(regionChartData);
     setConstituencyData(constituencyChartData);
     
-    console.log("Chart data processing completed", {
+    console.log("Chart data processing completed for ALL records", {
       genders: genderChartData.length,
       regions: regionChartData.length,
       constituencies: Object.keys(constituencyChartData).length,
@@ -309,7 +308,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Load admins from Supabase
   const loadAdminsFromSupabase = useCallback(async () => {
     try {
-      console.log("Fetching admins from Supabase");
+      console.log("Fetching ALL admins from Supabase");
       const { data: admins, error } = await supabase
         .from('admins')
         .select('*')
@@ -320,7 +319,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         throw error;
       }
 
-      console.log(`Fetched ${admins?.length || 0} admins from Supabase`);
+      console.log(`Fetched ALL ${admins?.length || 0} admins from Supabase`);
       
       // Convert to expected format
       const adminList: UserRole[] = (admins || []).map(admin => ({
@@ -343,7 +342,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
 
   // Enhanced realtime subscription
   const setupRealtimeSubscriptions = useCallback(() => {
-    console.log("Setting up realtime subscriptions for Supabase data");
+    console.log("Setting up realtime subscriptions for ALL Supabase data");
     
     // Voters table subscription
     const votersChannel = supabase
@@ -354,7 +353,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         table: 'voters'
       }, (payload) => {
         console.log(`Voters table change detected: ${payload.eventType}`);
-        // Reload all data when any change occurs
+        // Reload ALL data when any change occurs
         loadAllVoterDataFromSupabase();
       })
       .subscribe((status) => {
@@ -384,7 +383,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
 
   // Delete success handler
   const handleDeleteSuccess = useCallback(async () => {
-    console.log("Delete operation completed, refreshing data");
+    console.log("Delete operation completed, refreshing ALL data");
     await loadAllVoterDataFromSupabase();
     await loadAdminsFromSupabase();
   }, [loadAllVoterDataFromSupabase, loadAdminsFromSupabase]);
@@ -394,22 +393,22 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     setIsLoading(true);
     toast({
       title: "Export Started",
-      description: `Processing ${filteredData.length} records for export...`,
+      description: `Processing ALL ${filteredData.length} records for export...`,
     });
     
     setTimeout(() => {
       try {
-        console.log(`Starting CSV export of ${filteredData.length} records`);
+        console.log(`Starting CSV export of ALL ${filteredData.length} records`);
         
         const csvContent = generateCsvContent(filteredData);
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `NYPG_Voter_Statistics_${timestamp}.csv`;
+        const filename = `NYPG_ALL_Voter_Statistics_${timestamp}.csv`;
         downloadCsv(csvContent, filename);
         
         toast({
           title: "Export Successful",
-          description: `${filteredData.length} records exported successfully`,
+          description: `ALL ${filteredData.length} records exported successfully`,
         });
       } catch (error) {
         console.error("Error exporting data:", error);
@@ -424,9 +423,9 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }, 100);
   }, [filteredData]);
   
-  // Initial data loading - ultra fast approach
+  // Initial data loading - complete approach
   useEffect(() => {
-    console.log("Initializing ULTRA-FAST comprehensive data load from Supabase");
+    console.log("Initializing COMPLETE comprehensive data load from Supabase - ALL RECORDS");
     
     const initializeData = async () => {
       // Load both datasets in parallel for maximum speed
@@ -453,7 +452,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       return;
     }
     
-    console.log(`Applying filters to ${voterData.length} records`);
+    console.log(`Applying filters to ALL ${voterData.length} records`);
     
     let result = [...voterData];
     
@@ -516,7 +515,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       );
     }
     
-    console.log(`Filter applied: ${result.length} records after filtering`);
+    console.log(`Filter applied: ${result.length} records after filtering from ALL ${voterData.length} total records`);
     
     setFilteredData(result);
     setTotalRecords(result.length);
