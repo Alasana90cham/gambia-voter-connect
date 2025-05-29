@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Card } from '@/components/ui/card';
+import { X } from 'lucide-react'
 
 interface CountdownTimerProps {
   title?: string;
