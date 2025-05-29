@@ -1,4 +1,3 @@
-
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +10,7 @@ import ConstituencyStep from './steps/ConstituencyStep';
 import IdentificationStep from './steps/IdentificationStep';
 import CompleteStep from './steps/CompleteStep';
 import { toast } from '@/components/ui/use-toast';
-import { ArrowLeftIcon, ArrowRightIcon, Ban } from 'lucide-react';
+import { ArrowLeftIcon, ArrowRightIcon } from 'lucide-react';
 import { submitVoterRegistration } from '@/data/constituencies';
 
 interface Props {
@@ -53,43 +52,13 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState<FormStep>('declaration');
   const [formData, setFormData] = useState<VoterFormData>(initialFormData);
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [isRegistrationClosed, setIsRegistrationClosed] = useState(false);
   const currentStepIndex = steps.indexOf(currentStep);
-
-  // Check if registration is closed (after Wednesday 11:59 PM)
-  useEffect(() => {
-    const checkRegistrationStatus = () => {
-      const now = new Date();
-      const dayOfWeek = now.getDay(); // 0 = Sunday, 3 = Wednesday
-      
-      if (dayOfWeek === 3) {
-        // If it's Wednesday, check if it's after 11:59 PM
-        const todayAt1159 = new Date(now);
-        todayAt1159.setHours(23, 59, 0, 0);
-        setIsRegistrationClosed(now > todayAt1159);
-      } else if (dayOfWeek > 3 || dayOfWeek === 0) {
-        // If it's after Wednesday (Thursday-Sunday)
-        setIsRegistrationClosed(true);
-      } else {
-        // If it's before Wednesday (Monday-Tuesday)
-        setIsRegistrationClosed(false);
-      }
-    };
-
-    checkRegistrationStatus();
-    // Check every minute to update the status
-    const interval = setInterval(checkRegistrationStatus, 60000);
-    
-    return () => clearInterval(interval);
-  }, []);
 
   const updateFormData = useCallback((data: Partial<VoterFormData>) => {
     setFormData(prev => ({ ...prev, ...data }));
   }, []);
 
   const isNextDisabled = useCallback(() => {
-    if (isRegistrationClosed) return true;
-    
     switch (currentStep) {
       case 'declaration':
         return !formData.agreeToTerms;
@@ -104,18 +73,9 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
       default:
         return false;
     }
-  }, [currentStep, formData, isRegistrationClosed]);
+  }, [currentStep, formData]);
 
   const goToNextStep = async () => {
-    if (isRegistrationClosed) {
-      toast({
-        title: 'Registration Closed',
-        description: 'Voter registration has been closed.',
-        variant: 'destructive',
-      });
-      return;
-    }
-
     // If we're on the identification step (last step before complete)
     if (currentStep === 'identification') {
       try {
@@ -231,33 +191,6 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
     }
   };
 
-  if (isRegistrationClosed && currentStep !== 'complete') {
-    return (
-      <Card className="w-full max-w-3xl mx-auto">
-        <div className="p-6 text-center">
-          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-red-100 mb-6">
-            <Ban className="h-8 w-8 text-red-600" />
-          </div>
-          <h2 className="text-2xl font-bold text-red-600 mb-2">Registration Closed</h2>
-          <p className="text-gray-600 mb-4">
-            Voter registration has been closed. The registration deadline has passed.
-          </p>
-          <p className="text-sm text-gray-500 mb-6">
-            Registration was open until Wednesday at 11:59 PM.
-          </p>
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
-            <h3 className="font-semibold text-blue-900 mb-2">For any information, contact:</h3>
-            <div className="space-y-2 text-sm text-blue-800">
-              <p>📍 <strong>Visit:</strong> NYP Office at Westfield behind Family Planning</p>
-              <p>📧 <strong>Email:</strong> nypgambia.org</p>
-              <p>📞 <strong>Call:</strong> 3204119</p>
-            </div>
-          </div>
-        </div>
-      </Card>
-    );
-  }
-
   return (
     <Card className="w-full max-w-3xl mx-auto">
       <div className="p-6">
@@ -275,7 +208,7 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
           {renderCurrentStep()}
         </div>
         
-        {currentStep !== 'complete' && !isRegistrationClosed && (
+        {currentStep !== 'complete' && (
           <div className="mt-6 flex justify-between">
             <Button
               variant="outline"
