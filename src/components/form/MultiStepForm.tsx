@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -241,9 +242,17 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
           <p className="text-gray-600 mb-4">
             Voter registration has been closed. The registration deadline has passed.
           </p>
-          <p className="text-sm text-gray-500">
+          <p className="text-sm text-gray-500 mb-6">
             Registration was open until Wednesday at 11:59 PM.
           </p>
+          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 text-left">
+            <h3 className="font-semibold text-blue-900 mb-2">For any information, contact:</h3>
+            <div className="space-y-2 text-sm text-blue-800">
+              <p>📍 <strong>Visit:</strong> NYP Office at Westfield behind Family Planning</p>
+              <p>📧 <strong>Email:</strong> nypgambia.org</p>
+              <p>📞 <strong>Call:</strong> 3204119</p>
+            </div>
+          </div>
         </div>
       </Card>
     );
