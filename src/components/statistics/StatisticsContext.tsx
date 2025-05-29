@@ -102,50 +102,18 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
-  // ULTRA-COMPLETE data fetch - get EVERY SINGLE record without any limits
+  // COMPLETE UNLIMITED data fetch - get EVERY SINGLE record using recursive pagination
   const loadAllVoterDataFromSupabase = useCallback(async () => {
     setIsLoading(true);
-    console.log("Starting COMPLETE fetch of ALL voters from Supabase - NO LIMITS");
+    console.log("Starting COMPLETE UNLIMITED fetch of ALL voters from Supabase");
     
     try {
-      // Strategy 1: Single massive query with NO LIMITS to get absolutely everything
-      console.log("Attempting single query for ALL records with NO pagination limits");
+      let allVoters: any[] = [];
+      let hasMore = true;
+      let from = 0;
+      const batchSize = 1000; // Large batch size for efficiency
       
-      const { data: allVoters, error, count } = await supabase
-        .from('voters')
-        .select('*', { count: 'exact' })
-        .order('created_at', { ascending: true }); // First come first serve order - NO LIMITS
-
-      if (error) {
-        console.error("Error in complete query:", error);
-        throw error;
-      }
-
-      if (allVoters && allVoters.length > 0) {
-        console.log(`COMPLETE SUCCESS: Retrieved ALL ${allVoters.length} records in single query`);
-        console.log(`Database reports ${count} total records - we got them ALL`);
-        
-        // Set all data states immediately with ALL records
-        setVoterData(allVoters);
-        setFilteredData(allVoters);
-        setTotalRecords(allVoters.length);
-        setTotalPages(Math.ceil(allVoters.length / pageSize));
-        
-        // Process chart data with ALL records
-        processChartDataFromSupabase(allVoters);
-        
-        toast({
-          title: "Complete Database Load!",
-          description: `Loaded ALL ${allVoters.length} voter records - no records left behind!`,
-        });
-        
-        return; // Exit on complete success
-      }
-
-      // Fallback: If somehow no data, try parallel batching with NO upper limits
-      console.log("Fallback: Using unlimited parallel batch strategy");
-      
-      // Get total count first
+      // First, get the total count
       const { count: totalCount, error: countError } = await supabase
         .from('voters')
         .select('*', { count: 'exact', head: true });
@@ -155,59 +123,56 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         throw countError;
       }
 
-      console.log(`Total records in database: ${totalCount} - we will get ALL of them`);
+      console.log(`Total records in database: ${totalCount} - we will fetch ALL of them`);
       
-      // Create multiple parallel queries to get EVERYTHING
-      const batchSize = 5000; // Larger batches for efficiency
-      const totalBatches = Math.ceil(totalCount / batchSize);
-      const promises = [];
-
-      // Create ALL batch promises simultaneously for parallel execution
-      for (let i = 0; i < totalBatches; i++) {
-        const start = i * batchSize;
-        const end = start + batchSize - 1;
+      // Recursive pagination to get absolutely everything
+      while (hasMore) {
+        console.log(`Fetching batch starting from record ${from}`);
         
-        const promise = supabase
+        const { data: batchData, error: batchError } = await supabase
           .from('voters')
           .select('*')
-          .range(start, end)
-          .order('created_at', { ascending: true }); // First come first serve
+          .range(from, from + batchSize - 1)
+          .order('created_at', { ascending: true }); // First come first serve order
+
+        if (batchError) {
+          console.error("Error in batch fetch:", batchError);
+          throw batchError;
+        }
+
+        if (batchData && batchData.length > 0) {
+          console.log(`Retrieved ${batchData.length} records in this batch`);
+          allVoters = [...allVoters, ...batchData];
           
-        promises.push(promise);
-      }
-
-      console.log(`Executing ${promises.length} parallel queries to get ALL records`);
-      
-      // Execute ALL queries in parallel for maximum speed
-      const results = await Promise.all(promises);
-      
-      // Combine ALL results
-      let combinedVoters: any[] = [];
-      for (const { data, error } of results) {
-        if (error) {
-          console.error("Error in parallel batch:", error);
-          throw error;
-        }
-        if (data) {
-          combinedVoters = [...combinedVoters, ...data];
+          // Check if we got fewer records than requested, meaning we're done
+          if (batchData.length < batchSize) {
+            hasMore = false;
+            console.log("Reached end of data - no more records to fetch");
+          } else {
+            from += batchSize;
+          }
+        } else {
+          hasMore = false;
+          console.log("No more data returned - ending fetch");
         }
       }
 
-      console.log(`PARALLEL SUCCESS: Retrieved ALL ${combinedVoters.length} total records`);
+      console.log(`COMPLETE SUCCESS: Retrieved ALL ${allVoters.length} records from database`);
+      console.log(`Verification: Database reports ${totalCount}, we fetched ${allVoters.length}`);
 
-      if (combinedVoters.length > 0) {
+      if (allVoters.length > 0) {
         // Set all data states with ALL records
-        setVoterData(combinedVoters);
-        setFilteredData(combinedVoters);
-        setTotalRecords(combinedVoters.length);
-        setTotalPages(Math.ceil(combinedVoters.length / pageSize));
+        setVoterData(allVoters);
+        setFilteredData(allVoters);
+        setTotalRecords(allVoters.length);
+        setTotalPages(Math.ceil(allVoters.length / pageSize));
         
         // Process chart data with ALL records
-        processChartDataFromSupabase(combinedVoters);
+        processChartDataFromSupabase(allVoters);
         
         toast({
-          title: "Complete Parallel Load!",
-          description: `Loaded ALL ${combinedVoters.length} voter records via parallel processing.`,
+          title: "Complete Database Load Success!",
+          description: `Loaded ALL ${allVoters.length} voter records from database - no records left behind!`,
         });
       } else {
         // No data found
