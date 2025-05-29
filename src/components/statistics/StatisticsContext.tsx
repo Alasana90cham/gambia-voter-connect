@@ -102,26 +102,67 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
-  // Single query to fetch ALL records at once
+  // Enhanced fetch function to get ALL records without any limits
   const loadAllVoterDataFromSupabase = useCallback(async () => {
     setIsLoading(true);
-    console.log("Starting single query fetch of ALL voters from Supabase");
+    console.log("Starting comprehensive fetch of ALL voters from Supabase");
     
     try {
-      // Single query to get all records with a very large range
-      const { data: allVoters, error, count } = await supabase
+      // First, get the exact count of all records
+      const { count: totalCount, error: countError } = await supabase
         .from('voters')
-        .select('*', { count: 'exact', head: false })
-        .range(0, 999999)
-        .order('created_at', { ascending: true }); // First come first serve order
+        .select('*', { count: 'exact', head: true });
 
-      if (error) {
-        console.error("Error fetching all voters:", error);
-        throw error;
+      if (countError) {
+        console.error("Error getting total count:", countError);
+        throw countError;
       }
 
-      console.log(`Successfully fetched ALL ${allVoters?.length || 0} voters in one query`);
-      console.log(`Database count: ${count}, Fetched: ${allVoters?.length || 0}`);
+      console.log(`Total records in database: ${totalCount}`);
+
+      // Now fetch ALL records in batches to ensure we don't miss any
+      let allVoters: any[] = [];
+      const batchSize = 1000;
+      let offset = 0;
+      let hasMore = true;
+
+      while (hasMore) {
+        console.log(`Fetching batch starting at offset ${offset}`);
+        
+        const { data: batchData, error: batchError } = await supabase
+          .from('voters')
+          .select('*')
+          .range(offset, offset + batchSize - 1)
+          .order('created_at', { ascending: false });
+
+        if (batchError) {
+          console.error(`Error fetching batch at offset ${offset}:`, batchError);
+          throw batchError;
+        }
+
+        if (batchData && batchData.length > 0) {
+          allVoters = [...allVoters, ...batchData];
+          console.log(`Fetched ${batchData.length} records. Total so far: ${allVoters.length}`);
+          
+          // Continue if we got a full batch
+          hasMore = batchData.length === batchSize;
+          offset += batchSize;
+        } else {
+          hasMore = false;
+        }
+      }
+
+      console.log(`Successfully fetched ALL ${allVoters.length} voters from Supabase`);
+      console.log(`Expected: ${totalCount}, Actual: ${allVoters.length}`);
+
+      if (allVoters.length !== totalCount) {
+        console.warn(`Mismatch: Expected ${totalCount} records but got ${allVoters.length}`);
+        toast({
+          title: "Data Count Mismatch",
+          description: `Expected ${totalCount} records but loaded ${allVoters.length}. Some data might be missing.`,
+          variant: "destructive",
+        });
+      }
 
       if (allVoters && allVoters.length > 0) {
         // Set all data states
@@ -135,7 +176,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         
         toast({
           title: "Data Loaded Successfully",
-          description: `Loaded ${allVoters.length} voter records from database in one query.`,
+          description: `Loaded ${allVoters.length} voter records from database.`,
         });
       } else {
         // No data found
@@ -353,7 +394,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   
   // Initial data loading
   useEffect(() => {
-    console.log("Initializing single query data load from Supabase");
+    console.log("Initializing comprehensive data load from Supabase");
     
     const initializeData = async () => {
       await Promise.all([
