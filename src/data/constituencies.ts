@@ -1,4 +1,3 @@
-
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -75,31 +74,28 @@ export const regionConstituencies: { [key in GambiaRegion]: string[] } = {
   ]
 };
 
-// Improved caching with shorter TTL and automatic cache invalidation
+// Improved caching with shorter TTL
 class DataCache<T> {
   private data: T | null = null;
   private lastFetch = 0;
   private ttl: number;
   private fetchPromise: Promise<T> | null = null;
 
-  constructor(ttlMs: number = 30000) { // 30 seconds default TTL
+  constructor(ttlMs: number = 30000) {
     this.ttl = ttlMs;
   }
 
   async get(fetcher: () => Promise<T>): Promise<T> {
     const now = Date.now();
     
-    // Return cached data if still fresh
     if (this.data && now - this.lastFetch < this.ttl) {
       return this.data;
     }
 
-    // If a fetch is already in progress, return that promise to prevent multiple concurrent fetches
     if (this.fetchPromise) {
       return this.fetchPromise;
     }
 
-    // Start new fetch
     this.fetchPromise = fetcher()
       .then(result => {
         this.data = result;
@@ -109,7 +105,6 @@ class DataCache<T> {
       })
       .catch(error => {
         this.fetchPromise = null;
-        // If fetch fails and we have cached data, return it even if expired
         if (this.data) {
           console.warn("Fetch failed, returning stale data", error);
           return this.data;
@@ -126,16 +121,13 @@ class DataCache<T> {
   }
 }
 
-// Create caches for different data types
-const voterDataCache = new DataCache<any[]>(60000); // 1 minute cache for voter data
-const adminCache = new DataCache<UserRole[]>(300000); // 5 minutes cache for admin data
+const adminCache = new DataCache<UserRole[]>(300000);
 
-// Enhanced error handling with retry logic and exponential backoff
+// Enhanced error handling with retry logic
 const fetchWithRetry = async <T>(
   fetcher: () => Promise<T>, 
-  retries = 3, 
-  initialDelay = 1000,
-  maxDelay = 10000
+  retries = 2, 
+  initialDelay = 1000
 ): Promise<T> => {
   let delay = initialDelay;
   
@@ -149,78 +141,64 @@ const fetchWithRetry = async <T>(
       }
       
       console.log(`Attempt ${attempt + 1} failed, retrying in ${delay}ms`);
-      
-      // Wait for the calculated delay
       await new Promise(resolve => setTimeout(resolve, delay));
-      
-      // Exponential backoff with jitter
-      delay = Math.min(delay * 1.5 + Math.random() * 1000, maxDelay);
+      delay = Math.min(delay * 1.5, 10000);
     }
   }
   
   throw new Error("This should never happen");
 };
 
-// Improved database connection pooling and query optimization
+// Improved admin login with proper error handling
 export const verifyAdminLogin = async (email: string, password: string): Promise<boolean> => {
   try {
-    // Use a shorter timeout for login operations
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+    console.log("Attempting admin login...");
     
-    try {
-      const { data: rpcData, error: rpcError } = await supabase.rpc('admin_login', { 
-        admin_email: email, 
-        admin_password: password 
-      });
+    // Try RPC first
+    const { data: rpcData, error: rpcError } = await supabase.rpc('admin_login', { 
+      admin_email: email, 
+      admin_password: password 
+    });
+    
+    if (rpcError) {
+      console.error("RPC login error:", rpcError);
       
-      clearTimeout(timeoutId);
+      // Fallback to direct query
+      const { data, error } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('email', email)
+        .eq('password', password)
+        .single();
       
-      if (rpcError) {
-        console.error("RPC login error:", rpcError);
-        
-        // Fallback to direct query if RPC fails
-        const { data, error } = await supabase
-          .from('admins')
-          .select('*')
-          .eq('email', email as any)
-          .eq('password', password as any)
-          .single();
-        
-        if (error) {
-          console.error("Direct query error:", error);
-          return false;
-        }
-        
-        // Login successful via direct query
-        if (data) {
-          localStorage.setItem('adminSession', JSON.stringify({
-            email: email,
-            timestamp: new Date().toISOString()
-          }));
-          return true;
-        }
-        
+      if (error) {
+        console.error("Direct query error:", error);
         return false;
       }
       
-      // Login successful via RPC
-      if (rpcData) {
+      if (data) {
         localStorage.setItem('adminSession', JSON.stringify({
           email: email,
-          timestamp: new Date().toISOString()
+          timestamp: new Date().toISOString(),
+          expires: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString()
         }));
         return true;
       }
       
       return false;
-    } catch (error) {
-      clearTimeout(timeoutId);
-      if ((error as any).name === 'AbortError') {
-        console.error("Login request timed out");
-      }
-      throw error;
     }
+    
+    // Login successful via RPC
+    if (rpcData) {
+      localStorage.setItem('adminSession', JSON.stringify({
+        email: email,
+        timestamp: new Date().toISOString(),
+        expires: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString()
+      }));
+      return true;
+    }
+    
+    return false;
   } catch (error) {
     console.error("Error during login:", error);
     return false;
@@ -243,10 +221,9 @@ export const fetchAdmins = async (): Promise<UserRole[]> => {
           throw error;
         }
         
-        console.log("Admins fetched:", data);
+        console.log("Admins fetched:", data?.length || 0);
         
-        // Convert the data from Supabase to match our UserRole type
-        return data.map((admin: any) => ({
+        return (data || []).map((admin: any) => ({
           id: admin.id,
           email: admin.email,
           isAdmin: admin.is_admin,
@@ -260,7 +237,6 @@ export const fetchAdmins = async (): Promise<UserRole[]> => {
   });
 };
 
-// Rest of admin operations with optimized caching and retries
 export const addAdminUser = async (id: string, email: string, password: string): Promise<UserRole | null> => {
   return fetchWithRetry(async () => {
     try {
@@ -273,7 +249,7 @@ export const addAdminUser = async (id: string, email: string, password: string):
           email,
           password,
           is_admin: true
-        }] as any)
+        }])
         .select('*')
         .single();
         
@@ -283,11 +259,8 @@ export const addAdminUser = async (id: string, email: string, password: string):
       }
       
       console.log("Admin added:", data);
-      
-      // Invalidate admin cache after modifying data
       adminCache.invalidate();
       
-      // Handle possible type issues by checking properties - Fix TS18047 errors with null checks
       if (data) {
         return {
           id: data.id || id,
@@ -310,31 +283,26 @@ export const removeAdminUser = async (id: string): Promise<boolean> => {
     try {
       console.log("Removing admin with ID:", id);
       
-      // First attempt using RPC (stored procedure)
+      // Try RPC first
       try {
         const { error: rpcError } = await supabase.rpc('delete_admin', { admin_id: id });
         
         if (rpcError) {
           console.error("RPC error deleting admin:", rpcError);
-          // Fall through to direct delete if RPC fails
         } else {
           console.log("Admin deleted successfully via RPC");
-          
-          // Invalidate admin cache after modifying data
           adminCache.invalidate();
-          
           return true;
         }
       } catch (rpcError) {
         console.error("Exception in RPC delete:", rpcError);
-        // Fall through to direct delete
       }
       
-      // Fallback to direct delete if RPC fails
+      // Fallback to direct delete
       const { error } = await supabase
         .from('admins')
         .delete()
-        .eq('id', id as any);
+        .eq('id', id);
         
       if (error) {
         console.error("Error directly deleting admin:", error);
@@ -342,38 +310,11 @@ export const removeAdminUser = async (id: string): Promise<boolean> => {
       }
       
       console.log("Admin deleted successfully via direct delete");
-      
-      // Invalidate admin cache after modifying data
       adminCache.invalidate();
-      
       return true;
     } catch (error) {
       console.error("Error deleting admin:", error);
       return false;
-    }
-  });
-};
-
-export const fetchVoterData = async () => {
-  return voterDataCache.get(async () => {
-    try {
-      console.log("Fetching voter data...");
-      
-      const { data, error } = await supabase
-        .from('voters')
-        .select('*');
-        
-      if (error) {
-        console.error("Error fetching voter data:", error);
-        throw error;
-      }
-      
-      console.log("Voter data fetched:", data?.length || 0, "records");
-      
-      return data || [];
-    } catch (error) {
-      console.error("Error fetching voter data:", error);
-      throw error;
     }
   });
 };
@@ -387,7 +328,6 @@ export const submitVoterRegistration = async (formData: VoterFormData) => {
         throw new Error("Date of birth is required");
       }
       
-      // Use type casting to match Supabase expected types
       const insertData = {
         full_name: formData.fullName,
         email: formData.email,
@@ -401,10 +341,9 @@ export const submitVoterRegistration = async (formData: VoterFormData) => {
         agree_to_terms: formData.agreeToTerms
       };
       
-      // Format the Date object to a string for database storage
       const { data, error } = await supabase
         .from('voters')
-        .insert(insertData as any)
+        .insert(insertData)
         .select();
         
       if (error) {
@@ -413,10 +352,6 @@ export const submitVoterRegistration = async (formData: VoterFormData) => {
       }
       
       console.log("Registration submitted successfully:", data);
-      
-      // Invalidate voter data cache after new submission
-      voterDataCache.invalidate();
-      
       return data;
     } catch (error) {
       console.error("Error submitting registration:", error);
