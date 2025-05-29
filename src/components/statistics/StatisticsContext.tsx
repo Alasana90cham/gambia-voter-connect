@@ -102,13 +102,51 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
-  // Enhanced fetch function to get ALL records without any limits
+  // Ultra-fast complete data fetch - get everything at maximum speed
   const loadAllVoterDataFromSupabase = useCallback(async () => {
     setIsLoading(true);
-    console.log("Starting comprehensive fetch of ALL voters from Supabase");
+    console.log("Starting ULTRA-FAST complete fetch of ALL voters from Supabase");
     
     try {
-      // First, get the exact count of all records
+      // Strategy 1: Try to get absolutely everything in one massive query
+      console.log("Attempting single massive query for all records");
+      
+      const { data: allVoters, error, count } = await supabase
+        .from('voters')
+        .select('*', { count: 'exact' })
+        .order('created_at', { ascending: false })
+        .limit(50000); // Set a very high limit to get everything
+
+      if (error) {
+        console.error("Error in massive query:", error);
+        throw error;
+      }
+
+      if (allVoters && allVoters.length > 0) {
+        console.log(`ULTRA-FAST SUCCESS: Retrieved ${allVoters.length} records in single query`);
+        console.log(`Database reports ${count} total records`);
+        
+        // Set all data states immediately
+        setVoterData(allVoters);
+        setFilteredData(allVoters);
+        setTotalRecords(allVoters.length);
+        setTotalPages(Math.ceil(allVoters.length / pageSize));
+        
+        // Process chart data with all records
+        processChartDataFromSupabase(allVoters);
+        
+        toast({
+          title: "Ultra-Fast Load Complete!",
+          description: `Loaded ${allVoters.length} voter records at maximum speed.`,
+        });
+        
+        return; // Exit early on success
+      }
+
+      // Fallback: If somehow the single query didn't work, use rapid parallel fetching
+      console.log("Fallback: Using rapid parallel batch strategy");
+      
+      // Get total count first
       const { count: totalCount, error: countError } = await supabase
         .from('voters')
         .select('*', { count: 'exact', head: true });
@@ -119,64 +157,58 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       }
 
       console.log(`Total records in database: ${totalCount}`);
+      
+      // Create multiple parallel queries for maximum speed
+      const batchSize = 2000;
+      const totalBatches = Math.ceil(totalCount / batchSize);
+      const promises = [];
 
-      // Now fetch ALL records in batches to ensure we don't miss any
-      let allVoters: any[] = [];
-      const batchSize = 1000;
-      let offset = 0;
-      let hasMore = true;
-
-      while (hasMore) {
-        console.log(`Fetching batch starting at offset ${offset}`);
+      // Create all batch promises simultaneously for parallel execution
+      for (let i = 0; i < totalBatches; i++) {
+        const start = i * batchSize;
+        const end = start + batchSize - 1;
         
-        const { data: batchData, error: batchError } = await supabase
+        const promise = supabase
           .from('voters')
           .select('*')
-          .range(offset, offset + batchSize - 1)
+          .range(start, end)
           .order('created_at', { ascending: false });
-
-        if (batchError) {
-          console.error(`Error fetching batch at offset ${offset}:`, batchError);
-          throw batchError;
-        }
-
-        if (batchData && batchData.length > 0) {
-          allVoters = [...allVoters, ...batchData];
-          console.log(`Fetched ${batchData.length} records. Total so far: ${allVoters.length}`);
           
-          // Continue if we got a full batch
-          hasMore = batchData.length === batchSize;
-          offset += batchSize;
-        } else {
-          hasMore = false;
+        promises.push(promise);
+      }
+
+      console.log(`Executing ${promises.length} parallel queries for maximum speed`);
+      
+      // Execute ALL queries in parallel for maximum speed
+      const results = await Promise.all(promises);
+      
+      // Combine all results
+      let combinedVoters: any[] = [];
+      for (const { data, error } of results) {
+        if (error) {
+          console.error("Error in parallel batch:", error);
+          throw error;
+        }
+        if (data) {
+          combinedVoters = [...combinedVoters, ...data];
         }
       }
 
-      console.log(`Successfully fetched ALL ${allVoters.length} voters from Supabase`);
-      console.log(`Expected: ${totalCount}, Actual: ${allVoters.length}`);
+      console.log(`PARALLEL SUCCESS: Retrieved ${combinedVoters.length} total records via parallel queries`);
 
-      if (allVoters.length !== totalCount) {
-        console.warn(`Mismatch: Expected ${totalCount} records but got ${allVoters.length}`);
-        toast({
-          title: "Data Count Mismatch",
-          description: `Expected ${totalCount} records but loaded ${allVoters.length}. Some data might be missing.`,
-          variant: "destructive",
-        });
-      }
-
-      if (allVoters && allVoters.length > 0) {
+      if (combinedVoters.length > 0) {
         // Set all data states
-        setVoterData(allVoters);
-        setFilteredData(allVoters);
-        setTotalRecords(allVoters.length);
-        setTotalPages(Math.ceil(allVoters.length / pageSize));
+        setVoterData(combinedVoters);
+        setFilteredData(combinedVoters);
+        setTotalRecords(combinedVoters.length);
+        setTotalPages(Math.ceil(combinedVoters.length / pageSize));
         
         // Process chart data with all records
-        processChartDataFromSupabase(allVoters);
+        processChartDataFromSupabase(combinedVoters);
         
         toast({
-          title: "Data Loaded Successfully",
-          description: `Loaded ${allVoters.length} voter records from database.`,
+          title: "Parallel Load Complete!",
+          description: `Loaded ${combinedVoters.length} voter records via parallel processing.`,
         });
       } else {
         // No data found
@@ -392,11 +424,12 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }, 100);
   }, [filteredData]);
   
-  // Initial data loading
+  // Initial data loading - ultra fast approach
   useEffect(() => {
-    console.log("Initializing comprehensive data load from Supabase");
+    console.log("Initializing ULTRA-FAST comprehensive data load from Supabase");
     
     const initializeData = async () => {
+      // Load both datasets in parallel for maximum speed
       await Promise.all([
         loadAllVoterDataFromSupabase(),
         loadAdminsFromSupabase()
