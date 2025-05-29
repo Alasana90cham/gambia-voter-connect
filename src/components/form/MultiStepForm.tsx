@@ -1,3 +1,4 @@
+
 import React, { useState, useCallback, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -11,7 +12,6 @@ import IdentificationStep from './steps/IdentificationStep';
 import CompleteStep from './steps/CompleteStep';
 import { toast } from '@/components/ui/use-toast';
 import { ArrowLeftIcon, ArrowRightIcon } from 'lucide-react';
-import { submitVoterRegistration } from '@/data/constituencies';
 
 interface Props {
   onComplete?: () => void;
@@ -51,7 +51,6 @@ const initialFormData: VoterFormData = {
 const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
   const [currentStep, setCurrentStep] = useState<FormStep>('declaration');
   const [formData, setFormData] = useState<VoterFormData>(initialFormData);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const currentStepIndex = steps.indexOf(currentStep);
 
   const updateFormData = useCallback((data: Partial<VoterFormData>) => {
@@ -69,64 +68,19 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
       case 'constituency':
         return !formData.constituency;
       case 'identification':
-        return !formData.identificationType || !formData.identificationNumber;
+        return true; // Always disable the next button on identification step since we removed submission
       default:
         return false;
     }
   }, [currentStep, formData]);
 
   const goToNextStep = async () => {
-    // If we're on the identification step (last step before complete)
-    if (currentStep === 'identification') {
-      try {
-        setIsSubmitting(true);
-        
-        // Make sure gender is always one of the allowed values
-        let validGender: 'male' | 'female';
-        if (formData.gender === 'male' || formData.gender === 'female') {
-          validGender = formData.gender;
-        } else {
-          // Default to male if somehow the gender is null
-          validGender = 'male';
-        }
-        
-        // Ensure all required fields are present
-        const formDataToSubmit: VoterFormData = {
-          ...formData,
-          gender: validGender,
-          region: formData.region || 'Banjul',
-          constituency: formData.constituency || 'Banjul Central',
-          identificationType: formData.identificationType || 'identification_document',
-        };
-        
-        console.log("Submitting form data:", formDataToSubmit);
-        
-        // Submit the form data to the API
-        await submitVoterRegistration(formDataToSubmit);
-        
-        // Move to complete step after successful submission
-        setCurrentStep('complete');
-        
-        // Show success toast
-        toast({
-          title: 'Registration Successful',
-          description: 'Your voter registration has been submitted.',
-          variant: 'default',
-        });
-      } catch (error) {
-        console.error('Error submitting form:', error);
-        toast({
-          title: 'Registration Failed',
-          description: 'There was an error submitting your registration. Please try again.',
-          variant: 'destructive',
-        });
-      } finally {
-        setIsSubmitting(false);
-      }
-    } else {
+    // Remove submission logic - just navigate to next step normally
+    if (currentStep !== 'identification') {
       const nextStep = steps[currentStepIndex + 1];
       setCurrentStep(nextStep);
     }
+    // If on identification step, do nothing since we removed the submit functionality
   };
 
   const goToPreviousStep = () => {
@@ -208,7 +162,7 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
           {renderCurrentStep()}
         </div>
         
-        {currentStep !== 'complete' && (
+        {currentStep !== 'complete' && currentStep !== 'identification' && (
           <div className="mt-6 flex justify-between">
             <Button
               variant="outline"
@@ -222,12 +176,31 @@ const MultiStepForm: React.FC<Props> = ({ onComplete }) => {
             
             <Button
               onClick={goToNextStep}
-              disabled={isNextDisabled() || isSubmitting}
+              disabled={isNextDisabled()}
               className="gap-2"
             >
-              {isSubmitting ? 'Submitting...' : currentStep === 'identification' ? 'Submit' : 'Next'}
-              {!isSubmitting && <ArrowRightIcon size={16} />}
+              Next
+              <ArrowRightIcon size={16} />
             </Button>
+          </div>
+        )}
+        
+        {currentStep === 'identification' && (
+          <div className="mt-6 flex justify-between">
+            <Button
+              variant="outline"
+              onClick={goToPreviousStep}
+              className="gap-2"
+            >
+              <ArrowLeftIcon size={16} />
+              Back
+            </Button>
+            
+            <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex-1 ml-4">
+              <p className="text-red-700 font-medium text-center">
+                Registration has been closed. No submissions are currently being accepted.
+              </p>
+            </div>
           </div>
         )}
       </div>
