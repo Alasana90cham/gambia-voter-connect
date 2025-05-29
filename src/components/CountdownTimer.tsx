@@ -1,20 +1,17 @@
 
 import React from 'react';
 import { Card } from '@/components/ui/card';
-import { X } from 'lucide-react'
 
 interface CountdownTimerProps {
   title?: string;
 }
 
-const CountdownTimer: React.FC<CountdownTimerProps> = ({ title = "Registration Closes" }) => {
+const CountdownTimer: React.FC<CountdownTimerProps> = ({ title = "Registration Closed" }) => {
   return (
     <Card className="w-full max-w-4xl mx-auto mt-8 bg-red-50 border-red-200 border-2">
       <div className="p-8 text-center">
         <div className="flex items-center justify-center gap-3 mb-4">
-          <X className="text-red-600" size={32} />
           <h3 className="text-3xl font-bold text-red-600">{title}</h3>
-          <X className="text-red-600" size={32} />
         </div>
         <p className="text-red-700 font-bold text-xl mb-6">Registration has been closed since 28th May 2025</p>
         
