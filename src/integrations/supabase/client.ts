@@ -65,7 +65,7 @@ supabase.auth.onAuthStateChange((event, session) => {
 });
 
 // Simple batch operation for large datasets
-export const batchOperation = async (items, operationFn, batchSize = 500) => {
+export const batchOperation = async <T>(items: T[], operationFn: (batch: T[]) => Promise<any>, batchSize = 500) => {
   const batches = [];
   
   for (let i = 0; i < items.length; i += batchSize) {
@@ -87,7 +87,7 @@ export const batchOperation = async (items, operationFn, batchSize = 500) => {
 };
 
 // Simplified fetchPaginated without complex retry logic
-export const fetchPaginated = async <T>(
+export const fetchPaginated = async <T = any>(
   tableName: 'admins' | 'voters',
   options: {
     filters?: Record<string, any>;
@@ -124,7 +124,7 @@ export const fetchPaginated = async <T>(
     }
     
     console.log(`Successfully fetched ${data?.length || 0} ${tableName} records`);
-    return data || [];
+    return (data || []) as T[];
     
   } catch (error) {
     console.error('Error in fetchPaginated:', error);

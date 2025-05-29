@@ -1,3 +1,4 @@
+
 import { GambiaRegion, UserRole, VoterFormData } from "@/types/form";
 import { supabase } from "@/integrations/supabase/client";
 import { format } from "date-fns";
@@ -171,7 +172,7 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
       const { data: rpcData, error: rpcError } = await supabase.rpc('admin_login', { 
         admin_email: email, 
         admin_password: password 
-      }, { signal: controller.signal });
+      });
       
       clearTimeout(timeoutId);
       
@@ -215,7 +216,7 @@ export const verifyAdminLogin = async (email: string, password: string): Promise
       return false;
     } catch (error) {
       clearTimeout(timeoutId);
-      if (error.name === 'AbortError') {
+      if ((error as any).name === 'AbortError') {
         console.error("Login request timed out");
       }
       throw error;
