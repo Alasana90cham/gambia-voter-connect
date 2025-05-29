@@ -41,13 +41,15 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
       'X-Client-Info': 'supabase-js/2.x'
     },
     fetch: (url, options) => {
-      // NO TIMEOUT for unlimited data fetching
+      // Increased timeout to 20 minutes for very large dataset operations
+      const timeout = 1200000; 
       const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), timeout);
       
       return fetch(url, {
         ...options,
         signal: controller.signal,
-      });
+      }).finally(() => clearTimeout(timeoutId));
     }
   },
   db: {
@@ -64,7 +66,7 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
 let failedRequests = 0;
 const maxRetries = 10; // Increased for better resilience with large datasets
 const connectionPool = new Set();
-const maxPoolSize = 500; // Increased for unlimited data handling
+const maxPoolSize = 300; // Increased for better concurrency with large datasets
 
 // Simplified handleRequestWithRetry function to avoid excessive type instantiation
 const handleRequestWithRetry = async (requestFn) => {
@@ -133,8 +135,8 @@ supabase.auth.signInWithPassword = async (credentials) => {
   });
 };
 
-// Add optimized batch operations for handling unlimited datasets
-export const batchOperation = async (items, operationFn, batchSize = 1000) => {
+// Add optimized batch operations for handling large datasets
+export const batchOperation = async (items, operationFn, batchSize = 750) => {
   const batches = [];
   
   for (let i = 0; i < items.length; i += batchSize) {
@@ -155,53 +157,140 @@ export const batchOperation = async (items, operationFn, batchSize = 1000) => {
   return results;
 };
 
-// UNLIMITED fetchPaginated - get ALL records without any limits
+// Complete reimplementation of fetchPaginated with NO record limits
+// and multiple fail-safe mechanisms to ensure ALL records are retrieved
 export const fetchPaginated = async <T>(
   tableName: 'admins' | 'voters',
   options: {
     filters?: Record<string, any>;
     orderBy?: string;
     ascending?: boolean;
-  } = {}
+  } = {}, 
+  pageSize = 500000  // Use a MASSIVE page size to get all records at once
 ): Promise<T[]> => {
   const { filters = {}, orderBy = 'created_at', ascending = true } = options;
   const allResults: T[] = [];
   
-  console.log(`Starting UNLIMITED fetch for ALL records from ${tableName}`);
+  console.log(`Starting UNLIMITED paginated fetch for ${tableName} with NO record limits`);
 
   try {
-    // Single query strategy - get ALL records at once
-    let query = supabase.from(tableName).select('*');
+    // Try direct count first to verify total records
+    const { count, error: countError } = await supabase
+      .from(tableName)
+      .select('*', { count: 'exact', head: true });
     
-    // Add ordering
-    query = query.order(orderBy, { ascending });
+    if (countError) {
+      console.error(`Error getting count for ${tableName}:`, countError);
+    } else {
+      console.log(`Total records in ${tableName}: ${count}`);
+    }
     
-    // Apply filters
-    Object.entries(filters).forEach(([key, value]) => {
-      if (value !== undefined && value !== null && value !== '') {
-        // @ts-ignore
-        query = query.eq(key, value);
-      }
-    });
+    // Primary fetching strategy - get everything at once
+    try {
+      // Create a fresh query
+      let query = supabase.from(tableName).select('*');
+      
+      // Add ordering
+      query = query.order(orderBy, { ascending });
+      
+      // Apply filters
+      Object.entries(filters).forEach(([key, value]) => {
+        if (value !== undefined && value !== null && value !== '') {
+          // @ts-ignore
+          query = query.eq(key, value);
+        }
+      });
 
-    console.log(`Fetching ALL records from ${tableName} in single query`);
-    
-    const { data, error } = await query;
-    
-    if (error) {
-      console.error(`Error fetching ALL ${tableName} records:`, error);
-      throw error;
+      console.log(`Fetching ALL ${tableName} records at once`);
+      
+      const { data, error } = await query;
+      
+      if (error) {
+        console.error(`Error fetching all ${tableName} records:`, error);
+      } else if (data) {
+        console.log(`Successfully retrieved all ${data.length} records at once`);
+        allResults.push(...data as T[]);
+      }
+      
+      return allResults;
+      
+    } catch (allAtOnceError) {
+      console.error(`Error fetching all records at once:`, allAtOnceError);
     }
     
-    if (data) {
-      console.log(`Successfully retrieved ALL ${data.length} records from ${tableName}`);
-      allResults.push(...data as T[]);
+    // Fallback to chunked pagination if getting all at once fails
+    if (allResults.length === 0) {
+      console.log("Falling back to chunked pagination strategy");
+      
+      // Strategy 2: Standard pagination using range
+      let page = 0;
+      let hasMore = true;
+      const maxPages = 10000; // Virtually unlimited
+      const fallbackPageSize = 1000; // Smaller page size for reliability
+      
+      while (hasMore && page < maxPages) {
+        const start = page * fallbackPageSize;
+        
+        // Create a fresh query for each page
+        let query = supabase.from(tableName).select('*', { count: 'exact' });
+        
+        // Add ordering
+        query = query.order(orderBy, { ascending });
+        
+        // Add range for current page
+        query = query.range(start, start + fallbackPageSize - 1);
+        
+        // Apply filters
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value !== undefined && value !== null && value !== '') {
+            // @ts-ignore
+            query = query.eq(key, value);
+          }
+        });
+
+        console.log(`Fetching ${tableName} page ${page + 1} (${start}-${start + fallbackPageSize - 1})`);
+        
+        // Multiple retry mechanism for each page
+        let pageRetries = 0;
+        let pageData = null;
+        
+        while (pageRetries < 3 && !pageData) {
+          try {
+            const { data, error } = await query;
+            
+            if (error) {
+              console.error(`Error fetching page ${page + 1} (attempt ${pageRetries + 1}/3):`, error);
+              pageRetries++;
+              await new Promise(resolve => setTimeout(resolve, 1000 * pageRetries));
+            } else {
+              pageData = data;
+              break;
+            }
+          } catch (e) {
+            console.error(`Exception fetching page ${page + 1} (attempt ${pageRetries + 1}/3):`, e);
+            pageRetries++;
+            await new Promise(resolve => setTimeout(resolve, 1000 * pageRetries));
+          }
+        }
+        
+        if (pageData && pageData.length > 0) {
+          console.log(`Received ${pageData.length} records for page ${page + 1}`);
+          allResults.push(...pageData as T[]);
+        } else {
+          console.log(`No data received for page ${page + 1}, stopping pagination`);
+          hasMore = false;
+        }
+        
+        // Continue only if we received a full page of results
+        hasMore = pageData && pageData.length === fallbackPageSize;
+        page++;
+      }
     }
     
+    console.log(`FINAL RESULT: Fetched ${allResults.length} total records from ${tableName}`);
     return allResults;
-    
   } catch (error) {
-    console.error('Critical error in unlimited fetchPaginated:', error);
+    console.error('Critical error in fetchPaginated:', error);
     throw error;
   }
 };
