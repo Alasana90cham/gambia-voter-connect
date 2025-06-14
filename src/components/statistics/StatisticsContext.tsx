@@ -1,4 +1,3 @@
-
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { fetchAdmins } from '@/data/constituencies';
 import { toast } from "@/components/ui/use-toast";
@@ -108,6 +107,9 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     console.log("Loading ALL voter records in First Come First Serve order...");
     
     try {
+      // Add a small delay to prevent rapid requests
+      await new Promise(resolve => setTimeout(resolve, 100));
+      
       // Use the optimized single query
       const allVoters = await fetchAllRecords('voters');
       
@@ -127,7 +129,8 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
           description: `Loaded ${allVoters.length} voter records in First Come First Serve order.`,
         });
       } else {
-        // No data found
+        // No data found - set empty state
+        console.log("No voter data found or empty response");
         setVoterData([]);
         setFilteredData([]);
         setGenderData([]);
@@ -138,22 +141,26 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         
         toast({
           title: "No Data Found",
-          description: "No voter registration records were found.",
+          description: "No voter registration records were found in the database.",
         });
       }
     } catch (error) {
       console.error("Error loading voter data:", error);
-      toast({
-        title: "Database Error",
-        description: "Failed to load voter data. Please try again.",
-        variant: "destructive",
-      });
       
-      // Reset to empty state on error
+      // Set empty state on error
       setVoterData([]);
       setFilteredData([]);
+      setGenderData([]);
+      setRegionData([]);
+      setConstituencyData({});
       setTotalRecords(0);
       setTotalPages(1);
+      
+      toast({
+        title: "Database Connection Error",
+        description: "Failed to load voter data. Please check your connection and try again.",
+        variant: "destructive",
+      });
     } finally {
       setIsLoading(false);
     }
@@ -317,12 +324,25 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }, 100);
   }, [filteredData]);
   
-  // Initial data loading
+  // Initial data loading with retry logic
   useEffect(() => {
     console.log("Initializing data load...");
     
     const initializeData = async () => {
-      await Promise.all([loadAllVoterData(), loadAdmins()]);
+      try {
+        await Promise.all([loadAllVoterData(), loadAdmins()]);
+      } catch (error) {
+        console.error("Failed to initialize data:", error);
+        // Retry once after a delay
+        setTimeout(async () => {
+          console.log("Retrying data initialization...");
+          try {
+            await Promise.all([loadAllVoterData(), loadAdmins()]);
+          } catch (retryError) {
+            console.error("Retry also failed:", retryError);
+          }
+        }, 2000);
+      }
     };
     
     initializeData();
@@ -451,4 +471,3 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     </StatisticsContext.Provider>
   );
 };
-
