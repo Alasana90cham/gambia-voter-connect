@@ -166,7 +166,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     return allConstituencies;
   };
   
-  // Updated export function to show all data without any censoring
+  // Updated export function to show all data without any censoring and proper ID number formatting
   const handleExcelExport = () => {
     // Create a CSV string with the filtered data showing complete information
     const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number,Registration Date\n";
@@ -187,8 +187,9 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                     voter.identification_type === 'identification_document' ? 'ID Document' :
                     voter.identification_type === 'passport_number' ? 'Passport' : '';
       
-      // Show complete data without any masking or censoring
-      csvContent += `${index + 1},"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}","${registrationDate}"\n`;
+      // Show complete ID number without any masking or censoring, format as text to prevent scientific notation
+      const idNumber = voter.identification_number || '';
+      csvContent += `${index + 1},"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${idNumber}","${registrationDate}"\n`;
     });
     
     // Create a blob and trigger download
@@ -268,6 +269,9 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                         voter.identification_type === 'identification_document' ? 'ID Document' :
                         voter.identification_type === 'passport_number' ? 'Passport' : '';
           
+          // Show complete ID number without any masking or censoring
+          const idNumber = voter.identification_number || '';
+          
           printWindow.document.write('<tr>');
           printWindow.document.write(`<td>${index + 1}</td>`);
           printWindow.document.write(`<td>${voter.full_name || ''}</td>`);
@@ -278,7 +282,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
           printWindow.document.write(`<td>${voter.region || ''}</td>`);
           printWindow.document.write(`<td>${voter.constituency || ''}</td>`);
           printWindow.document.write(`<td>${idType}</td>`);
-          printWindow.document.write(`<td>${voter.identification_number || ''}</td>`);
+          printWindow.document.write(`<td>${idNumber}</td>`);
           printWindow.document.write(`<td>${registrationDate}</td>`);
           printWindow.document.write('</tr>');
         });

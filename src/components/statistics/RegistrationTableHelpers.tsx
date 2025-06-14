@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { TableCell, TableRow } from "@/components/ui/table";
 
@@ -30,7 +31,10 @@ export const formatForExport = (voter: VoterData) => {
                 voter.identification_type === 'passport_number' ? 'Passport' : '';
   
   // Return complete data without any masking, censoring, or redaction
-  return `"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"`;
+  // Format ID number as text to prevent scientific notation
+  const idNumber = voter.identification_number ? `"${voter.identification_number}"` : '""';
+  
+  return `"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}",${idNumber}`;
 };
 
 // Enhanced batch processing helper for large datasets with memory optimization
@@ -101,7 +105,7 @@ export const filterLargeDataset = (data: any[], filterFn: (item: any) => boolean
   return result;
 };
 
-// Generate complete CSV content with all information visible
+// Generate complete CSV content with all information visible and proper ID number formatting
 export const generateCsvContent = (data: any[], includeHeaders = true): string => {
   const headers = "No.,Full Name,Email Address,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number (Complete)\n";
   const chunkSize = 1000;
@@ -119,13 +123,16 @@ export const generateCsvContent = (data: any[], includeHeaders = true): string =
       const voter = data[j];
       const rowNum = j + 1; // 1-based row numbering
       
-      // Format with complete information - no censoring
+      // Format with complete information - no censoring, preserve exact ID numbers
       const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
       const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
                     voter.identification_type === 'identification_document' ? 'ID Document' :
                     voter.identification_type === 'passport_number' ? 'Passport' : '';
       
-      csvContent += `${rowNum},"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${voter.identification_number || ''}"\n`;
+      // Format ID number as text to prevent Excel from converting to scientific notation
+      const idNumber = voter.identification_number || '';
+      
+      csvContent += `${rowNum},"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${idNumber}"\n`;
     }
   }
   
