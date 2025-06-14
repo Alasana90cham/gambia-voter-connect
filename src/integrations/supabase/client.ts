@@ -21,26 +21,6 @@ export const supabase = createClient<Database>(SUPABASE_URL, SUPABASE_PUBLISHABL
     headers: {
       'apikey': SUPABASE_PUBLISHABLE_KEY,
       'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-      'Cache-Control': 'no-cache',
-      'Pragma': 'no-cache',
-      'X-Client-Info': 'supabase-js/2.x'
-    },
-    fetch: (url, options) => {
-      // Longer timeout for large datasets
-      const timeout = 30000; // 30 seconds
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), timeout);
-      
-      return fetch(url, {
-        ...options,
-        signal: controller.signal,
-        headers: {
-          ...options?.headers,
-          'apikey': SUPABASE_PUBLISHABLE_KEY,
-          'Authorization': `Bearer ${SUPABASE_PUBLISHABLE_KEY}`,
-          'Connection': 'keep-alive',
-        }
-      }).finally(() => clearTimeout(timeoutId));
     }
   },
   db: {
@@ -75,17 +55,15 @@ export const batchOperation = async <T>(items: T[], operationFn: (batch: T[]) =>
   return results;
 };
 
-// Improved single query to fetch ALL records with proper ordering and error handling
+// Simplified single query to fetch ALL records with proper ordering
 export const fetchAllRecords = async (tableName: 'voters' | 'admins'): Promise<any[]> => {
   console.log(`Fetching ALL ${tableName} records in FCFS order`);
 
   try {
-    // Use a more reasonable range instead of 99999
     const { data, error } = await supabase
       .from(tableName)
       .select('*')
-      .order('created_at', { ascending: true }) // FCFS order
-      .limit(10000); // More reasonable limit
+      .order('created_at', { ascending: true });
     
     if (error) {
       console.error(`Error fetching ${tableName}:`, error);
@@ -97,7 +75,6 @@ export const fetchAllRecords = async (tableName: 'voters' | 'admins'): Promise<a
     
   } catch (error) {
     console.error('Error in fetchAllRecords:', error);
-    // Return empty array instead of throwing to prevent app crash
     return [];
   }
 };

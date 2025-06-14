@@ -101,19 +101,15 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
-  // Optimized single-query fetch for ALL voter data in FCFS order
+  // Simplified voter data loading
   const loadAllVoterData = useCallback(async () => {
+    console.log("Starting voter data load...");
     setIsLoading(true);
-    console.log("Loading ALL voter records in First Come First Serve order...");
     
     try {
-      // Add a small delay to prevent rapid requests
-      await new Promise(resolve => setTimeout(resolve, 100));
-      
-      // Use the optimized single query
       const allVoters = await fetchAllRecords('voters');
       
-      console.log(`Successfully loaded ${allVoters.length} voters in FCFS order`);
+      console.log(`Voter data loaded: ${allVoters.length} records`);
       
       if (allVoters && allVoters.length > 0) {
         setVoterData(allVoters);
@@ -126,11 +122,10 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         
         toast({
           title: "Data Loaded Successfully",
-          description: `Loaded ${allVoters.length} voter records in First Come First Serve order.`,
+          description: `Loaded ${allVoters.length} voter records.`,
         });
       } else {
-        // No data found - set empty state
-        console.log("No voter data found or empty response");
+        console.log("No voter data found");
         setVoterData([]);
         setFilteredData([]);
         setGenderData([]);
@@ -141,13 +136,12 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
         
         toast({
           title: "No Data Found",
-          description: "No voter registration records were found in the database.",
+          description: "No voter registration records were found.",
         });
       }
     } catch (error) {
-      console.error("Error loading voter data:", error);
+      console.error("Failed to load voter data:", error);
       
-      // Set empty state on error
       setVoterData([]);
       setFilteredData([]);
       setGenderData([]);
@@ -157,8 +151,8 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       setTotalPages(1);
       
       toast({
-        title: "Database Connection Error",
-        description: "Failed to load voter data. Please check your connection and try again.",
+        title: "Database Error",
+        description: "Failed to load voter data. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -230,6 +224,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       console.log("Fetching admin users...");
       const admins = await fetchAdmins();
       setAdminList(admins);
+      console.log(`Admins loaded: ${admins.length} records`);
     } catch (error) {
       console.error("Error loading admins:", error);
       toast({
@@ -324,28 +319,11 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }, 100);
   }, [filteredData]);
   
-  // Initial data loading with retry logic
+  // Simplified initial data loading
   useEffect(() => {
     console.log("Initializing data load...");
     
-    const initializeData = async () => {
-      try {
-        await Promise.all([loadAllVoterData(), loadAdmins()]);
-      } catch (error) {
-        console.error("Failed to initialize data:", error);
-        // Retry once after a delay
-        setTimeout(async () => {
-          console.log("Retrying data initialization...");
-          try {
-            await Promise.all([loadAllVoterData(), loadAdmins()]);
-          } catch (retryError) {
-            console.error("Retry also failed:", retryError);
-          }
-        }, 2000);
-      }
-    };
-    
-    initializeData();
+    Promise.all([loadAllVoterData(), loadAdmins()]);
     
     // Set up realtime subscriptions
     const unsubscribe = setupRealtimeSubscriptions();
