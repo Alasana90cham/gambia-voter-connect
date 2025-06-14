@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -6,7 +7,6 @@ import { Input } from '@/components/ui/input';
 import { Table, TableHeader, TableRow, TableHead, TableBody, TableCell } from "@/components/ui/table";
 import { toast } from "@/components/ui/use-toast";
 import { Checkbox } from "@/components/ui/checkbox";
-import { supabase } from "@/integrations/supabase/client";
 import {
   Pagination,
   PaginationContent,
@@ -17,7 +17,7 @@ import {
   PaginationPrevious,
   generatePaginationItems
 } from "@/components/ui/pagination";
-import { NoDataRow, formatForExport } from './RegistrationTableHelpers';
+import { NoDataRow } from './RegistrationTableHelpers';
 
 interface ChartData {
   name: string;
@@ -56,7 +56,7 @@ interface RegistrationTableProps {
   constituencyData: {[key: string]: ChartData[]};
   onUpdateFilters: (filters: FilterState) => void;
   filters: FilterState;
-  onDeleteSuccess?: () => void; // Prop to trigger parent refresh
+  onDeleteSuccess?: () => void;
   currentPage?: number;
   totalPages?: number;
   pageSize?: number;
@@ -166,38 +166,89 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     return allConstituencies;
   };
   
-  // Updated export function to show all data without any censoring and proper ID number formatting
+  // New CSV export function with proper number formatting
   const handleExcelExport = () => {
-    // Create a CSV string with the filtered data showing complete information
-    const headers = "No.,Full Name,Email,Organization,Date Of Birth,Gender,Region,Constituency,ID Type,ID Number,Registration Date\n";
-    let csvContent = headers;
+    if (filteredData.length === 0) {
+      toast({
+        title: "No Data to Export",
+        description: "There are no records to export.",
+        variant: "destructive",
+      });
+      return;
+    }
     
-    // Add the filtered data rows with complete information (no redaction or censoring)
-    // Sort by registration date for first-come-first-serve order
-    const sortedForExport = [...filteredData].sort((a, b) => {
+    // Sort data by registration date (first come first serve)
+    const sortedData = [...filteredData].sort((a, b) => {
       const dateA = new Date(a.created_at || 0).getTime();
       const dateB = new Date(b.created_at || 0).getTime();
       return dateA - dateB;
     });
     
-    sortedForExport.forEach((voter, index) => {
-      const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
-      const registrationDate = voter.created_at ? new Date(voter.created_at).toLocaleDateString() : '';
-      const idType = voter.identification_type === 'birth_certificate' ? 'Birth Certificate' : 
-                    voter.identification_type === 'identification_document' ? 'ID Document' :
-                    voter.identification_type === 'passport_number' ? 'Passport' : '';
+    // Create CSV headers
+    const headers = [
+      'Serial No.',
+      'Full Name',
+      'Email Address',
+      'Organization',
+      'Date of Birth',
+      'Gender',
+      'Region',
+      'Constituency',
+      'ID Type',
+      'ID Number',
+      'Registration Date'
+    ];
+    
+    // Create CSV content
+    let csvContent = headers.join(',') + '\n';
+    
+    sortedData.forEach((voter, index) => {
+      const serialNo = index + 1;
+      const fullName = `"${(voter.full_name || '').replace(/"/g, '""')}"`;
+      const email = `"${(voter.email || '').replace(/"/g, '""')}"`;
+      const organization = `"${(voter.organization || '').replace(/"/g, '""')}"`;
+      const dateOfBirth = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+      const gender = voter.gender || '';
+      const region = `"${(voter.region || '').replace(/"/g, '""')}"`;
+      const constituency = `"${(voter.constituency || '').replace(/"/g, '""')}"`;
       
-      // Show complete ID number without any masking or censoring, format as text to prevent scientific notation
-      const idNumber = voter.identification_number || '';
-      csvContent += `${index + 1},"${voter.full_name || ''}","${voter.email || ''}","${voter.organization || ''}","${dob}","${voter.gender || ''}","${voter.region || ''}","${voter.constituency || ''}","${idType}","${idNumber}","${registrationDate}"\n`;
+      let idType = '';
+      if (voter.identification_type === 'birth_certificate') {
+        idType = 'Birth Certificate';
+      } else if (voter.identification_type === 'identification_document') {
+        idType = 'ID Document';
+      } else if (voter.identification_type === 'passport_number') {
+        idType = 'Passport';
+      }
+      
+      // Format ID number with leading apostrophe to force text format in Excel
+      const idNumber = voter.identification_number ? `"'${voter.identification_number}"` : '""';
+      
+      const registrationDate = voter.created_at ? new Date(voter.created_at).toLocaleDateString() : '';
+      
+      const row = [
+        serialNo,
+        fullName,
+        email,
+        organization,
+        dateOfBirth,
+        gender,
+        region,
+        constituency,
+        `"${idType}"`,
+        idNumber,
+        registrationDate
+      ].join(',');
+      
+      csvContent += row + '\n';
     });
     
-    // Create a blob and trigger download
+    // Create and download file
     const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
     const url = URL.createObjectURL(blob);
     const link = document.createElement('a');
     link.href = url;
-    link.download = `NYPG_Voter_Statistics_FirstComeFirstServe_${new Date().toISOString().split('T')[0]}.csv`;
+    link.download = `NYPG_Registration_Data_${new Date().toISOString().split('T')[0]}.csv`;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -205,11 +256,11 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
     
     toast({
       title: "Export Successful",
-      description: `${filteredData.length} complete records exported in first-come-first-serve order`,
+      description: `${filteredData.length} records exported with proper number formatting`,
     });
   };
 
-  // Enhanced print function to show all data without any censoring in first-come-first-serve order
+  // Enhanced print function with proper number formatting
   const handlePrint = () => {
     if (tableRef.current) {
       const printWindow = window.open('', '_blank');
@@ -246,7 +297,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         printWindow.document.write('</div>');
         printWindow.document.write('<table>');
         
-        // Table headers with all columns including complete information
+        // Table headers
         printWindow.document.write('<tr>');
         printWindow.document.write('<th style="width: 3%;">No.</th>');
         printWindow.document.write('<th style="width: 13%;">Full Name</th>');
@@ -261,7 +312,7 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         printWindow.document.write('<th style="width: 10%;">Registration Date</th>');
         printWindow.document.write('</tr>');
         
-        // Table data with complete information in first-come-first-serve order
+        // Table data
         sortedForPrint.forEach((voter, index) => {
           const dob = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
           const registrationDate = voter.created_at ? new Date(voter.created_at).toLocaleDateString() : '';
@@ -269,7 +320,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
                         voter.identification_type === 'identification_document' ? 'ID Document' :
                         voter.identification_type === 'passport_number' ? 'Passport' : '';
           
-          // Show complete ID number without any masking or censoring
           const idNumber = voter.identification_number || '';
           
           printWindow.document.write('<tr>');
@@ -299,7 +349,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
         printWindow.document.write('</body></html>');
         printWindow.document.close();
         
-        // Auto-focus the print window
         printWindow.focus();
       }
     }
@@ -337,46 +386,6 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
   useEffect(() => {
     setSelectedRows([]);
   }, [effectiveCurrentPage, localData]);
-  
-  // Set up real-time subscription for deleted rows with privacy protection
-  useEffect(() => {
-    console.log("Setting up real-time subscription for voter updates");
-    
-    const channel = supabase
-      .channel('voter-delete-events')
-      .on('postgres_changes', {
-        event: 'DELETE',
-        schema: 'public',
-        table: 'voters'
-      }, (payload) => {
-        console.log("Received real-time DELETE event");
-        
-        // Update local data immediately when a delete happens elsewhere
-        if (payload.old && payload.old.id) {
-          setLocalData(prev => prev.filter(voter => voter.id !== payload.old.id));
-        }
-      })
-      .subscribe((status) => {
-        console.log("Voter delete subscription status:", status);
-        if (status === 'CHANNEL_ERROR') {
-          console.error("Error with delete event subscription");
-          toast({
-            title: "Sync Error",
-            description: "Realtime updates for deletions may not work. Please refresh if you see inconsistencies.",
-            variant: "destructive",
-          });
-        }
-      });
-      
-    return () => {
-      console.log("Cleaning up delete events subscription");
-      try {
-        supabase.removeChannel(channel);
-      } catch (error) {
-        console.error("Error removing delete events channel");
-      }
-    };
-  }, []);
   
   // Additional data loading indicator for large datasets
   const renderLoadingState = () => {
@@ -431,11 +440,11 @@ const RegistrationTable: React.FC<RegistrationTableProps> = ({
           </Button>
           <Button variant="outline" onClick={handleExcelExport} className="flex items-center gap-2">
             <Download size={16} />
-            Export Complete CSV
+            Export CSV
           </Button>
           <Button variant="outline" onClick={handlePrint} className="flex items-center gap-2" id="printTable">
             <Printer size={16} />
-            Print Complete Data
+            Print Data
           </Button>
         </div>
       </div>

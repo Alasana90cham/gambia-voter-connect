@@ -1,15 +1,10 @@
+
 import React, { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { fetchAdmins } from '@/data/constituencies';
 import { toast } from "@/components/ui/use-toast";
 import { UserRole } from "@/types/form";
 import { supabase, fetchAllRecords } from "@/integrations/supabase/client";
 import { debounce } from "@/lib/utils";
-import { 
-  getVisibleRows, 
-  processBatch, 
-  generateCsvContent, 
-  downloadCsv 
-} from './RegistrationTableHelpers';
 
 interface ChartData {
   name: string;
@@ -101,7 +96,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
   // Loading states
   const [isLoading, setIsLoading] = useState(false);
 
-  // Simplified voter data loading
+  // Load all voter data once (no realtime updates)
   const loadAllVoterData = useCallback(async () => {
     console.log("Starting voter data load...");
     setIsLoading(true);
@@ -218,7 +213,7 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     console.log("Chart data processing completed");
   }, []);
   
-  // Load admins
+  // Load admins once (no realtime updates)
   const loadAdmins = useCallback(async () => {
     try {
       console.log("Fetching admin users...");
@@ -235,47 +230,13 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }
   }, []);
 
-  // Setup realtime subscriptions for data updates
-  const setupRealtimeSubscriptions = useCallback(() => {
-    console.log("Setting up realtime subscriptions");
-    
-    const votersChannel = supabase
-      .channel('voters-realtime')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'voters'
-      }, (payload) => {
-        console.log(`Voters table change detected: ${payload.eventType}`);
-        loadAllVoterData();
-      })
-      .subscribe();
-      
-    const adminsChannel = supabase
-      .channel('admins-realtime')
-      .on('postgres_changes', { 
-        event: '*', 
-        schema: 'public', 
-        table: 'admins'
-      }, (payload) => {
-        console.log(`Admins table change detected: ${payload.eventType}`);
-        loadAdmins();
-      })
-      .subscribe();
-    
-    return () => {
-      supabase.removeChannel(votersChannel);
-      supabase.removeChannel(adminsChannel);
-    };
-  }, [loadAllVoterData, loadAdmins]);
-
-  // Delete success handler
+  // Delete success handler (manual refresh only)
   const handleDeleteSuccess = useCallback(async () => {
     console.log("Delete operation completed, refreshing data");
     await Promise.all([loadAllVoterData(), loadAdmins()]);
   }, [loadAllVoterData, loadAdmins]);
   
-  // CSV export functionality
+  // New CSV export function with proper number formatting
   const handleExcelExport = useCallback(() => {
     if (filteredData.length === 0) {
       toast({
@@ -296,15 +257,86 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
       try {
         console.log(`Starting CSV export of ${filteredData.length} records`);
         
-        const csvContent = generateCsvContent(filteredData);
+        // Sort data by registration date (first come first serve)
+        const sortedData = [...filteredData].sort((a, b) => {
+          const dateA = new Date(a.created_at || 0).getTime();
+          const dateB = new Date(b.created_at || 0).getTime();
+          return dateA - dateB;
+        });
         
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        const filename = `NYPG_Voter_Statistics_${timestamp}.csv`;
-        downloadCsv(csvContent, filename);
+        // Create CSV headers
+        const headers = [
+          'Serial No.',
+          'Full Name',
+          'Email Address',
+          'Organization',
+          'Date of Birth',
+          'Gender',
+          'Region',
+          'Constituency',
+          'ID Type',
+          'ID Number',
+          'Registration Date'
+        ];
+        
+        // Create CSV content
+        let csvContent = headers.join(',') + '\n';
+        
+        sortedData.forEach((voter, index) => {
+          const serialNo = index + 1;
+          const fullName = `"${(voter.full_name || '').replace(/"/g, '""')}"`;
+          const email = `"${(voter.email || '').replace(/"/g, '""')}"`;
+          const organization = `"${(voter.organization || '').replace(/"/g, '""')}"`;
+          const dateOfBirth = voter.date_of_birth ? voter.date_of_birth.split('T')[0] : '';
+          const gender = voter.gender || '';
+          const region = `"${(voter.region || '').replace(/"/g, '""')}"`;
+          const constituency = `"${(voter.constituency || '').replace(/"/g, '""')}"`;
+          
+          let idType = '';
+          if (voter.identification_type === 'birth_certificate') {
+            idType = 'Birth Certificate';
+          } else if (voter.identification_type === 'identification_document') {
+            idType = 'ID Document';
+          } else if (voter.identification_type === 'passport_number') {
+            idType = 'Passport';
+          }
+          
+          // Format ID number with leading apostrophe to force text format
+          const idNumber = voter.identification_number ? `"'${voter.identification_number}"` : '""';
+          
+          const registrationDate = voter.created_at ? new Date(voter.created_at).toLocaleDateString() : '';
+          
+          const row = [
+            serialNo,
+            fullName,
+            email,
+            organization,
+            dateOfBirth,
+            gender,
+            region,
+            constituency,
+            `"${idType}"`,
+            idNumber,
+            registrationDate
+          ].join(',');
+          
+          csvContent += row + '\n';
+        });
+        
+        // Create and download file
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `NYPG_Registration_Data_${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
         
         toast({
           title: "Export Successful",
-          description: `${filteredData.length} records exported successfully`,
+          description: `${filteredData.length} records exported successfully with proper formatting`,
         });
       } catch (error) {
         console.error("Error exporting data:", error);
@@ -319,19 +351,11 @@ export const StatisticsProvider: React.FC<{ children: ReactNode }> = ({ children
     }, 100);
   }, [filteredData]);
   
-  // Simplified initial data loading
+  // Load data once on initialization (no realtime subscriptions)
   useEffect(() => {
-    console.log("Initializing data load...");
-    
+    console.log("Initializing data load (one-time only)...");
     Promise.all([loadAllVoterData(), loadAdmins()]);
-    
-    // Set up realtime subscriptions
-    const unsubscribe = setupRealtimeSubscriptions();
-    
-    return () => {
-      unsubscribe();
-    };
-  }, [loadAllVoterData, loadAdmins, setupRealtimeSubscriptions]);
+  }, [loadAllVoterData, loadAdmins]);
 
   // Enhanced filter application
   const applyFilters = useCallback(() => {
